@@ -317,6 +317,7 @@ func (m FileUserDatabaseUserDetails) ToUserDetailsModel() (model FileDatabaseUse
 		PhoneExtension: m.PhoneExtension,
 		Email:          m.Email,
 		Groups:         m.Groups,
+		Disabled:       m.Disabled,
 		Address:        m.Address,
 		Extra:          m.Extra,
 	}
