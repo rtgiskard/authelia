@@ -81,6 +81,48 @@ func (p *FileUserProvider) Close() (err error) {
 	return nil
 }
 
+// CreateUser creates a new user in the file backend.
+func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
+	if strings.TrimSpace(details.Username) == "" || strings.TrimSpace(details.Password) == "" || strings.TrimSpace(details.DisplayName) == "" {
+		return ErrOperationFailed
+	}
+
+	if _, err = p.database.GetUserDetails(details.Username); err == nil {
+		return ErrUserAlreadyExists
+	} else if !errors.Is(err, ErrUserNotFound) {
+		return err
+	}
+
+	var digest algorithm.Digest
+
+	if digest, err = p.hash.Hash(details.Password); err != nil {
+		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
+	}
+
+	user := FileUserDatabaseUserDetails{
+		Username:    details.Username,
+		Password:    schema.NewPasswordDigest(digest),
+		Disabled:    details.Disabled,
+		DisplayName: details.DisplayName,
+		Email:       details.Email,
+		Groups:      details.Groups,
+	}
+
+	if err = p.database.CreateUserDetails(details.Username, &user); err != nil {
+		if errors.Is(err, ErrUserAlreadyExists) {
+			return ErrUserAlreadyExists
+		}
+
+		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
+	}
+
+	p.mutex.Lock()
+	p.setTimeoutReload(time.Now())
+	p.mutex.Unlock()
+
+	return nil
+}
+
 // CheckUserPassword checks if provided password matches for the given user.
 func (p *FileUserProvider) CheckUserPassword(username string, password string) (match bool, err error) {
 	var details FileUserDatabaseUserDetails
