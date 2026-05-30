@@ -228,6 +228,16 @@ type changePasswordRequestBody struct {
 	NewPassword string `json:"new_password"`
 }
 
+// adminCreateUserRequestBody model of the admin create user request body.
+type adminCreateUserRequestBody struct {
+	Username    string   `json:"username" valid:"required"`
+	Password    string   `json:"password" valid:"required"`
+	DisplayName string   `json:"display_name" valid:"required"`
+	Email       string   `json:"email"`
+	Groups      []string `json:"groups"`
+	Disabled    bool     `json:"disabled"`
+}
+
 // PasswordPolicyBody represents the response sent by the password reset step 2.
 type PasswordPolicyBody struct {
 	Mode             string `json:"mode"`
