@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,7 @@ import (
 	"github.com/authelia/authelia/v4/internal/middlewares"
 	"github.com/authelia/authelia/v4/internal/oidc"
 	"github.com/authelia/authelia/v4/internal/random"
+	"github.com/authelia/authelia/v4/internal/session"
 	"github.com/authelia/authelia/v4/internal/templates"
 )
 
@@ -117,6 +119,8 @@ func TestHandleNotFound(t *testing.T) {
 	}{
 		{"ShouldReturn404ForAPIPath", "/api", fasthttp.StatusNotFound, false},
 		{"ShouldReturn404ForAPISubpath", "/api/something", fasthttp.StatusNotFound, false},
+		{"ShouldReturn404ForAdminAPIPath", "/admin/api", fasthttp.StatusNotFound, false},
+		{"ShouldReturn404ForAdminAPISubpath", "/admin/api/v1/users", fasthttp.StatusNotFound, false},
 		{"ShouldReturn404ForWellKnown", "/.well-known", fasthttp.StatusNotFound, false},
 		{"ShouldReturn404ForWellKnownSubpath", "/.well-known/openid-configuration", fasthttp.StatusNotFound, false},
 		{"ShouldReturn404ForStatic", "/static", fasthttp.StatusNotFound, false},
@@ -360,6 +364,109 @@ func TestHandlerMainWithOptionalFeatures(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.NotNil(t, handler)
+		})
+	}
+}
+
+func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
+	provider, err := templates.New(templates.Config{})
+	require.NoError(t, err)
+
+	require.NoError(t, provider.LoadTemplatedAssets(assets))
+
+	testCases := []struct {
+		name               string
+		administration     schema.Administration
+		session            *session.UserSession
+		expectedStatusCode int
+	}{
+		{
+			"ShouldNotRegisterRouteByDefault",
+			schema.Administration{},
+			nil,
+			fasthttp.StatusNotFound,
+		},
+		{
+			"ShouldDenyEnabledRouteWithoutSession",
+			schema.Administration{Enable: true, Users: []string{"john"}},
+			nil,
+			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldReturnSkeletonResponseForAuthorizedUser",
+			schema.Administration{Enable: true, Users: []string{"john"}},
+			&session.UserSession{Username: "john"},
+			fasthttp.StatusNotImplemented,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &schema.Configuration{
+				Administration: tc.administration,
+				Server: schema.Server{
+					Address:   schema.DefaultServerConfiguration.Address,
+					Endpoints: schema.DefaultServerConfiguration.Endpoints,
+				},
+				Session: schema.Session{
+					SessionCookieCommon: schema.DefaultSessionConfiguration.SessionCookieCommon,
+					Cookies: []schema.SessionCookie{
+						{
+							SessionCookieCommon: schema.DefaultSessionConfiguration.SessionCookieCommon,
+							Domain:              "example.com",
+						},
+					},
+				},
+			}
+
+			providers := middlewares.NewProvidersBasic()
+			providers.Random = random.NewMathematical()
+			providers.SessionProvider = session.NewProvider(config.Session, nil)
+			providers.Templates = provider
+
+			handler, err := handlerMain(t.Context(), config, providers)
+			require.NoError(t, err)
+
+			var ctx fasthttp.RequestCtx
+			var req fasthttp.Request
+
+			req.Header.SetMethod(fasthttp.MethodPost)
+			req.Header.Set(fasthttp.HeaderXForwardedHost, "login.example.com:8080")
+			req.Header.Set(fasthttp.HeaderXForwardedProto, "https")
+			req.SetRequestURI("/admin/api/v1/users")
+			ctx.Init(&req, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}, nil)
+
+			if tc.session != nil {
+				var sessionCtx fasthttp.RequestCtx
+				var sessionReq fasthttp.Request
+
+				sessionReq.Header.SetHost("login.example.com:8080")
+				sessionReq.Header.Set(fasthttp.HeaderXForwardedHost, "login.example.com:8080")
+				sessionReq.Header.Set(fasthttp.HeaderXForwardedProto, "https")
+				sessionReq.SetRequestURI("/admin/api/v1/users")
+				sessionCtx.Init(&sessionReq, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}, nil)
+
+				sessionProvider, err := providers.SessionProvider.Get("example.com")
+				require.NoError(t, err)
+
+				userSession := sessionProvider.NewDefaultUserSession()
+				userSession.Username = tc.session.Username
+				userSession.AuthenticationMethodRefs.UsernameAndPassword = true
+				userSession.AuthenticationMethodRefs.WebAuthn = true
+				userSession.Elevations.User = &session.Elevation{ID: 1, Expires: providers.Clock.Now().Add(schema.DefaultSessionConfiguration.Expiration), RemoteIP: net.ParseIP("127.0.0.1")}
+
+				require.NoError(t, sessionProvider.SaveSession(&sessionCtx, userSession))
+
+				matches := regexp.MustCompile(`^authelia_session=([^;]+);`).FindStringSubmatch(string(sessionCtx.Response.Header.PeekCookie("authelia_session")))
+				require.Len(t, matches, 2)
+
+				ctx.Request.Header.SetCookie("authelia_session", matches[1])
+				ctx.Request.Header.SetHost("login.example.com:8080")
+			}
+
+			handler(&ctx)
+
+			assert.Equal(t, tc.expectedStatusCode, ctx.Response.StatusCode())
 		})
 	}
 }
