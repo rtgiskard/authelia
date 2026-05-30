@@ -215,6 +215,11 @@ func handlerMain(ctx context.Context, config *schema.Configuration, providers mi
 		WithPostMiddlewares(middlewares.RequireElevated).
 		Build()
 
+	middlewareAdministration := middlewares.NewBridgeBuilder(*config, providers).
+		WithPreMiddlewares(middlewares.SecurityHeadersBase, middlewares.SecurityHeadersNoStore, middlewares.SecurityHeadersCSPNone).
+		WithPostMiddlewares(middlewares.RequireElevated, middlewares.RequireAdministration).
+		Build()
+
 	r.HEAD("/api/health", middlewareAPI(handlers.HealthGET))
 	r.GET("/api/health", middlewareAPI(handlers.HealthGET))
 
@@ -223,6 +228,10 @@ func handlerMain(ctx context.Context, config *schema.Configuration, providers mi
 	r.GET("/api/configuration", middleware1FA(handlers.ConfigurationGET))
 
 	r.GET("/api/configuration/password-policy", middlewareAPI(handlers.PasswordPolicyConfigurationGET))
+
+	if config.Administration.Enable {
+		r.POST("/admin/api/v1/users", middlewareAdministration(handlers.AdminUsersPOST))
+	}
 
 	metricsVRMW := middlewares.NewMetricsAuthzRequest(providers.Metrics)
 
