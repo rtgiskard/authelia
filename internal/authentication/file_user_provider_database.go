@@ -20,6 +20,7 @@ import (
 type FileUserProviderDatabase interface {
 	Save() (err error)
 	Load() (err error)
+	CreateUserDetails(username string, details *FileUserDatabaseUserDetails) (err error)
 	GetUserDetails(username string) (user FileUserDatabaseUserDetails, err error)
 	SetUserDetails(username string, details *FileUserDatabaseUserDetails)
 }
@@ -166,25 +167,81 @@ func (m *FileUserDatabase) GetUserDetails(username string) (user FileUserDatabas
 
 	defer m.RUnlock()
 
+	if user, ok := m.getUserDetails(username); ok {
+		return user, nil
+	}
+
+	return user, ErrUserNotFound
+}
+
+func (m *FileUserDatabase) getUserDetails(username string) (user FileUserDatabaseUserDetails, ok bool) {
 	u := strings.ToLower(username)
 
 	if m.SearchEmail {
 		if key, ok := m.Emails[u]; ok {
-			return m.Users[key], nil
+			return m.Users[key], true
 		}
 	}
 
 	if m.SearchCI {
 		if key, ok := m.Aliases[u]; ok {
-			return m.Users[key], nil
+			return m.Users[key], true
 		}
 	}
 
 	if details, ok := m.Users[username]; ok {
-		return details, nil
+		return details, true
 	}
 
-	return user, ErrUserNotFound
+	return user, false
+}
+
+// CreateUserDetails creates the FileUserDatabaseUserDetails for a given user atomically.
+func (m *FileUserDatabase) CreateUserDetails(username string, details *FileUserDatabaseUserDetails) (err error) {
+	if details == nil {
+		return nil
+	}
+
+	m.Lock()
+
+	defer m.Unlock()
+
+	if _, ok := m.getUserDetails(username); ok {
+		return ErrUserAlreadyExists
+	}
+
+	users := make(map[string]FileUserDatabaseUserDetails, len(m.Users)+1)
+
+	for user, existing := range m.Users {
+		users[user] = existing
+	}
+
+	users[username] = *details
+
+	database := &FileUserDatabase{
+		RWMutex:     &sync.RWMutex{},
+		Users:       users,
+		Emails:      map[string]string{},
+		Aliases:     map[string]string{},
+		Path:        m.Path,
+		SearchEmail: m.SearchEmail,
+		SearchCI:    m.SearchCI,
+		Extra:       m.Extra,
+	}
+
+	if err = database.LoadAliases(); err != nil {
+		return err
+	}
+
+	if err = database.ToDatabaseModel().Write(m.Path); err != nil {
+		return err
+	}
+
+	m.Users = database.Users
+	m.Emails = database.Emails
+	m.Aliases = database.Aliases
+
+	return nil
 }
 
 // SetUserDetails sets the FileUserDatabaseUserDetails for a given user.
