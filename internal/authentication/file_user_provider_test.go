@@ -326,6 +326,10 @@ func TestShouldUpdatePassword(t *testing.T) {
 		ok, err := provider.CheckUserPassword("harry", "newpassword")
 		assert.NoError(t, err)
 		assert.True(t, ok)
+
+		db, ok := provider.database.(*FileUserDatabase)
+		require.True(t, ok)
+		assert.True(t, db.Users["dis"].Disabled)
 	})
 }
 
