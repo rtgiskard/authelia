@@ -27,6 +27,7 @@ type Configuration struct {
 	PasswordPolicy        PasswordPolicy        `koanf:"password_policy" yaml:"password_policy,omitempty" toml:"password_policy,omitempty" json:"password_policy,omitempty" jsonschema:"title=Password Policy" jsonschema_description:"Password Policy Configuration."`
 	PrivacyPolicy         PrivacyPolicy         `koanf:"privacy_policy" yaml:"privacy_policy,omitempty" toml:"privacy_policy,omitempty" json:"privacy_policy,omitempty" jsonschema:"title=Privacy Policy" jsonschema_description:"Privacy Policy Configuration."`
 	IdentityValidation    IdentityValidation    `koanf:"identity_validation" yaml:"identity_validation,omitempty" toml:"identity_validation,omitempty" json:"identity_validation,omitempty" jsonschema:"title=Identity Validation" jsonschema_description:"Identity Validation Configuration."`
+	Administration        Administration        `koanf:"administration" yaml:"administration,omitempty" toml:"administration,omitempty" json:"administration,omitempty" jsonschema:"title=Administration" jsonschema_description:"Administration Control Plane Configuration."`
 	Definitions           Definitions           `koanf:"definitions" yaml:"definitions,omitempty" toml:"definitions,omitempty" json:"definitions,omitempty" jsonschema:"title=Definitions" jsonschema_description:"Definitions for items reused elsewhere in the configuration."`
 
 	// Deprecated: Use the session cookies option with the same name instead.
