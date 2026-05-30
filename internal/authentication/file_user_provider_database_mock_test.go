@@ -39,6 +39,20 @@ func (m *MockFileUserDatabase) EXPECT() *MockFileUserDatabaseMockRecorder {
 	return m.recorder
 }
 
+// CreateUserDetails mocks base method.
+func (m *MockFileUserDatabase) CreateUserDetails(username string, details *FileUserDatabaseUserDetails) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUserDetails", username, details)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateUserDetails indicates an expected call of CreateUserDetails.
+func (mr *MockFileUserDatabaseMockRecorder) CreateUserDetails(username, details any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUserDetails", reflect.TypeOf((*MockFileUserDatabase)(nil).CreateUserDetails), username, details)
+}
+
 // GetUserDetails mocks base method.
 func (m *MockFileUserDatabase) GetUserDetails(username string) (FileUserDatabaseUserDetails, error) {
 	m.ctrl.T.Helper()
