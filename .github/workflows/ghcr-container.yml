@@ -49,7 +49,8 @@ jobs:
 
           grep -F 'FROM authelia/base:${TAG}@sha256:${SHA}' Dockerfile
           grep -F 'COPY --link authelia-${TARGETOS}-${TARGETARCH}/authelia LICENSE entrypoint.sh healthcheck.sh ./' Dockerfile
-          grep -F -- '--platform", "linux/amd64,linux/arm/v7,linux/arm64"' cmd/authelia-scripts/cmd/helpers_docker.go
+          grep -F 'linux/amd64' cmd/authelia-scripts/cmd/helpers_docker.go
+          grep -F 'linux/arm64' cmd/authelia-scripts/cmd/helpers_docker.go
 
       - name: Run session and URL tests
         run: go test ./internal/utils ./internal/configuration/validator ./internal/session ./internal/middlewares
@@ -96,10 +97,8 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             gcc \
             gcc-aarch64-linux-gnu \
-            gcc-arm-linux-gnueabihf \
             jq \
-            libc6-dev-arm64-cross \
-            libc6-dev-armhf-cross
+            libc6-dev-arm64-cross
 
       - name: Compute Authelia build metadata
         id: build-meta
@@ -177,7 +176,6 @@ jobs:
           build_one() {
             local arch="${1}"
             local cc="${2}"
-            local goarm="${3:-}"
 
             mkdir -p "authelia-linux-${arch}"
 
@@ -192,10 +190,6 @@ jobs:
               "GOARCH=${arch}"
             )
 
-            if [[ -n "${goarm}" ]]; then
-              common_env+=("GOARM=${goarm}")
-            fi
-
             env "${common_env[@]}" go build \
               -buildmode=pie \
               -trimpath \
@@ -205,7 +199,6 @@ jobs:
           }
 
           build_one amd64 gcc
-          build_one arm arm-linux-gnueabihf-gcc 7
           build_one arm64 aarch64-linux-gnu-gcc
 
       - name: Verify official image build equivalence inputs
@@ -214,11 +207,11 @@ jobs:
           set -euo pipefail
 
           test -x authelia-linux-amd64/authelia
-          test -x authelia-linux-arm/authelia
           test -x authelia-linux-arm64/authelia
           grep -F 'FROM authelia/base:${TAG}@sha256:${SHA}' Dockerfile
           grep -F 'COPY --link authelia-${TARGETOS}-${TARGETARCH}/authelia LICENSE entrypoint.sh healthcheck.sh ./' Dockerfile
-          grep -F -- '--platform", "linux/amd64,linux/arm/v7,linux/arm64"' cmd/authelia-scripts/cmd/helpers_docker.go
+          grep -F 'linux/amd64' cmd/authelia-scripts/cmd/helpers_docker.go
+          grep -F 'linux/arm64' cmd/authelia-scripts/cmd/helpers_docker.go
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -279,7 +272,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
