@@ -766,6 +766,128 @@ func TestShouldAllowLookupCI(t *testing.T) {
 	})
 }
 
+func TestFileUserProviderCreateUserShouldSucceed(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		err := provider.CreateUser(UserDetailsCreate{
+			Username:    "alice",
+			Password:    "password123",
+			DisplayName: "Alice Example",
+			Email:       "alice@example.com",
+			Groups:      []string{"admins", "users"},
+		})
+
+		assert.NoError(t, err)
+
+		details, err := provider.GetDetails("alice")
+		assert.NoError(t, err)
+		require.NotNil(t, details)
+		assert.Equal(t, "Alice Example", details.DisplayName)
+		assert.Equal(t, []string{"admins", "users"}, details.Groups)
+
+		ok, err := provider.CheckUserPassword("alice", "password123")
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		content, err := os.ReadFile(path)
+		assert.NoError(t, err)
+		assert.Contains(t, string(content), "alice:")
+		assert.NotContains(t, string(content), "password123")
+	})
+}
+
+func TestFileUserProviderCreateUserShouldRejectDuplicate(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+		assert.ErrorIs(t, provider.CreateUser(UserDetailsCreate{Username: "john", Password: "password123", DisplayName: "John"}), ErrUserAlreadyExists)
+	})
+}
+
+func TestFileUserProviderCreateUserShouldRejectAliasCollisionWithoutMutation(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+		config.Search.Email = true
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		err := provider.CreateUser(UserDetailsCreate{
+			Username:    "alice",
+			Password:    "password123",
+			DisplayName: "Alice Example",
+			Email:       "john.doe@authelia.com",
+		})
+
+		assert.Error(t, err)
+
+		details, err := provider.GetDetails("alice")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, details)
+	})
+}
+
+func TestFileUserProviderCreateUserShouldNotMutateWhenSaveFails(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		provider.database.(*FileUserDatabase).Path = filepath.Join(t.TempDir(), "missing", "users.yml")
+
+		err := provider.CreateUser(UserDetailsCreate{
+			Username:    "alice",
+			Password:    "password123",
+			DisplayName: "Alice Example",
+		})
+
+		assert.Error(t, err)
+
+		details, err := provider.GetDetails("alice")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, details)
+	})
+}
+
+func TestFileUserProviderCreateUserShouldPreserveConcurrentDuplicateError(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mock := NewMockFileUserDatabase(ctrl)
+		provider.database = mock
+
+		gomock.InOrder(
+			mock.EXPECT().GetUserDetails("alice").Return(FileUserDatabaseUserDetails{}, ErrUserNotFound),
+			mock.EXPECT().CreateUserDetails("alice", gomock.Any()).Return(ErrUserAlreadyExists),
+		)
+
+		assert.ErrorIs(t, provider.CreateUser(UserDetailsCreate{Username: "alice", Password: "password123", DisplayName: "Alice Example"}), ErrUserAlreadyExists)
+	})
+}
+
 func TestNewFileCryptoHashFromConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
