@@ -1,0 +1,298 @@
+---
+name: GHCR Container
+
+"on":
+  push:
+    branches:
+      - dev
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ghcr.io/rtgiskard/authelia
+  NODE_VERSION: "22.13.1"
+  PNPM_VERSION: "11"
+  SWAGGER_UI_VERSION: "5.32.6"
+
+jobs:
+  pull-request:
+    name: Validate official-equivalent inputs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Verify official image build equivalence inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -F 'FROM authelia/base:${TAG}@sha256:${SHA}' Dockerfile
+          grep -F 'COPY --link authelia-${TARGETOS}-${TARGETARCH}/authelia LICENSE entrypoint.sh healthcheck.sh ./' Dockerfile
+          grep -F -- '--platform", "linux/amd64,linux/arm/v7,linux/arm64"' cmd/authelia-scripts/cmd/helpers_docker.go
+
+      - name: Run session and URL tests
+        run: go test ./internal/utils ./internal/configuration/validator ./internal/session ./internal/middlewares
+
+      - name: Build Authelia command
+        run: go build ./cmd/authelia
+
+  publish:
+    name: Build and publish official-equivalent image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install native cross-build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            gcc \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabihf \
+            jq \
+            libc6-dev-arm64-cross \
+            libc6-dev-armhf-cross
+
+      - name: Compute Authelia build metadata
+        id: build-meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          branch="${GITHUB_REF_NAME}"
+          commit="$(git rev-parse HEAD)"
+          tag_commit="$(git rev-list --tags --max-count=1 2>/dev/null || true)"
+          if [[ -n "${tag_commit}" ]]; then
+            build_tag="$(git describe --tags --abbrev=0 "${tag_commit}")"
+          else
+            build_tag="v0.0.0"
+          fi
+
+          state_tag="untagged"
+          if [[ -n "${tag_commit}" && "${tag_commit}" == "${commit}" ]]; then
+            state_tag="tagged"
+          fi
+
+          state_clean="dirty"
+          if [[ -z "$(git status --porcelain)" ]]; then
+            state_clean="clean"
+          fi
+
+          build_date="$(date '+%a, %d %b %Y %H:%M:%S %z')"
+          build_state="${state_tag} ${state_clean}"
+
+          {
+            printf "xflags<<EOF\n"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildBranch=%s' " "${branch}"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildTag=%s' " "${build_tag}"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildCommit=%s' " "${commit}"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildDate=%s' " "${build_date}"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildState=%s' " "${build_state}"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildExtra=%s' " "rtgiskard-ghcr"
+            printf -- "-X 'github.com/authelia/authelia/v4/internal/utils.BuildNumber=%s'\n" "${GITHUB_RUN_NUMBER}"
+            printf "EOF\n"
+            printf "commit=%s\n" "${commit}"
+            printf "build-tag=%s\n" "${build_tag}"
+            printf "build-state=%s\n" "${build_state}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build frontend assets like authelia-scripts build
+        working-directory: web
+        run: |
+          pnpm install --ignore-scripts
+          pnpm build
+
+      - name: Build Swagger UI assets like authelia-scripts build
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/swagger-api/swagger-ui/archive/v${SWAGGER_UI_VERSION}.tar.gz" \
+            -o "v${SWAGGER_UI_VERSION}.tar.gz"
+          cp -r api internal/server/public_html
+          tar -C internal/server/public_html/api \
+            --exclude=index.html \
+            --exclude="*.map" \
+            --exclude="*-es-*" \
+            --exclude="swagger-{ui,initializer}.js" \
+            --strip-components=2 \
+            -xf "v${SWAGGER_UI_VERSION}.tar.gz" \
+            "swagger-ui-${SWAGGER_UI_VERSION}/dist"
+          rm "v${SWAGGER_UI_VERSION}.tar.gz"
+
+      - name: Build Linux glibc binaries for official Dockerfile layout
+        shell: bash
+        env:
+          XFLAGS: ${{ steps.build-meta.outputs.xflags }}
+        run: |
+          set -euo pipefail
+
+          build_one() {
+            local arch="${1}"
+            local cc="${2}"
+            local goarm="${3:-}"
+
+            mkdir -p "authelia-linux-${arch}"
+
+            common_env=(
+              "CGO_CFLAGS=-O2 -pipe -fno-plt -fstack-protector-strong"
+              "CGO_CPPFLAGS=-D_FORTIFY_SOURCE=3"
+              "CGO_CXXFLAGS=-O2 -pipe -fno-plt"
+              "CGO_LDFLAGS=-Wl,-O1,-sort-common,-as-needed,-z,relro,-z,now"
+              "CGO_ENABLED=1"
+              "CC=${cc}"
+              "GOOS=linux"
+              "GOARCH=${arch}"
+            )
+
+            if [[ -n "${goarm}" ]]; then
+              common_env+=("GOARM=${goarm}")
+            fi
+
+            env "${common_env[@]}" go build \
+              -buildmode=pie \
+              -trimpath \
+              -o "authelia-linux-${arch}/authelia" \
+              -ldflags="-linkmode=external -s -w ${XFLAGS}" \
+              ./cmd/authelia/
+          }
+
+          build_one amd64 gcc
+          build_one arm arm-linux-gnueabihf-gcc 7
+          build_one arm64 aarch64-linux-gnu-gcc
+
+      - name: Verify official image build equivalence inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -x authelia-linux-amd64/authelia
+          test -x authelia-linux-arm/authelia
+          test -x authelia-linux-arm64/authelia
+          grep -F 'FROM authelia/base:${TAG}@sha256:${SHA}' Dockerfile
+          grep -F 'COPY --link authelia-${TARGETOS}-${TARGETARCH}/authelia LICENSE entrypoint.sh healthcheck.sh ./' Dockerfile
+          grep -F -- '--platform", "linux/amd64,linux/arm/v7,linux/arm64"' cmd/authelia-scripts/cmd/helpers_docker.go
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+
+      - name: Resolve official Authelia base image digest
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_tag="latest"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            base_tag="${GITHUB_REF_NAME#v}"
+          fi
+
+          digest="$(docker buildx imagetools inspect "authelia/base:${base_tag}" --format '{{ json . }}' | jq -r '.manifest.digest')"
+          if [[ -z "${digest}" || "${digest}" == "null" ]]; then
+            echo "Unable to resolve authelia/base:${base_tag} digest" >&2
+            exit 1
+          fi
+
+          printf 'tag=%s\n' "${base_tag}" >> "${GITHUB_OUTPUT}"
+          printf 'sha=%s\n' "${digest#sha256:}" >> "${GITHUB_OUTPUT}"
+          printf 'ref=authelia/base:%s@%s\n' "${base_tag}" "${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.authors=rtgiskard
+            org.opencontainers.image.source=https://github.com/rtgiskard/authelia
+            org.opencontainers.image.base.name=docker.io/${{ steps.base.outputs.ref }}
+            org.opencontainers.image.revision=${{ steps.build-meta.outputs.commit }}
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish official-equivalent image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            TAG=${{ steps.base.outputs.tag }}
+            SHA=${{ steps.base.outputs.sha }}
+          provenance: mode=max,reproducible=true
+          sbom: true
+
+      - name: Inspect published image manifest
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_tag="$(printf '%s\n' '${{ steps.meta.outputs.tags }}' | head -n 1)"
+          docker buildx imagetools inspect "${first_tag}"
