@@ -39,6 +39,7 @@ var (
 		name, prefix string
 	}{
 		{name: "/api", prefix: prefixAPI},
+		{name: "/admin/api", prefix: "/admin/api/"},
 		{name: "/.well-known", prefix: "/.well-known/"},
 		{name: "/static", prefix: "/static/"},
 		{name: "/locales", prefix: "/locales/"},
