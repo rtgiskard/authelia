@@ -1,6 +1,6 @@
-import { ReactNode, SyntheticEvent, useCallback, useEffect, useState } from "react";
+import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useState } from "react";
 
-import { Close, Dashboard, Menu, Security, SystemSecurityUpdateGood } from "@mui/icons-material";
+import { Close, Dashboard, Menu, People, Security, SystemSecurityUpdateGood } from "@mui/icons-material";
 import {
     AppBar,
     Box,
@@ -23,6 +23,7 @@ import {
     SecuritySubRoute,
     SettingsRoute,
     SettingsTwoFactorAuthenticationSubRoute,
+    SettingsUserManagementSubRoute,
 } from "@constants/Routes";
 import { useRouterNavigate } from "@hooks/RouterNavigate";
 
@@ -33,7 +34,7 @@ export interface Props {
 
 const defaultDrawerWidth = 240;
 
-const SettingsLayout = function (props: Props) {
+const SettingsLayout = (props: Props) => {
     const { t: translate } = useTranslation("settings");
     const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -147,12 +148,18 @@ const navItems: NavItem[] = [
         pathname: `${SettingsRoute}${SettingsTwoFactorAuthenticationSubRoute}`,
         text: "Two-Factor Authentication",
     },
+    {
+        icon: <People color={"primary"} />,
+        keyname: "user-management",
+        pathname: `${SettingsRoute}${SettingsUserManagementSubRoute}`,
+        text: "User Management",
+    },
     { icon: <Close color={"error"} />, keyname: "close", pathname: IndexRoute, text: "Close" },
 ];
 
-const DrawerNavItem = function (props: NavItem) {
+const DrawerNavItem = (props: NavItem) => {
     const selected =
-        globalThis.location.pathname === props.pathname || globalThis.location.pathname === props.pathname + "/";
+        globalThis.location.pathname === props.pathname || globalThis.location.pathname === `${props.pathname}/`;
     const navigate = useRouterNavigate();
 
     const handleOnClick = useCallback(() => {

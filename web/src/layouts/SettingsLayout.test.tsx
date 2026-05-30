@@ -17,6 +17,7 @@ vi.mock("@constants/Routes", () => ({
     SecuritySubRoute: "/security",
     SettingsRoute: "/settings",
     SettingsTwoFactorAuthenticationSubRoute: "/two-factor-authentication",
+    SettingsUserManagementSubRoute: "/user-management",
 }));
 
 vi.mock("@hooks/RouterNavigate", () => ({
@@ -56,6 +57,7 @@ it("renders navigation items in drawer", async () => {
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
     expect(screen.getByText("Two-Factor Authentication")).toBeInTheDocument();
+    expect(screen.getByText("User Management")).toBeInTheDocument();
     expect(screen.getByText("Close")).toBeInTheDocument();
 });
 
@@ -124,11 +126,13 @@ it("does not close drawer on Tab keydown event", async () => {
         fireEvent.click(screen.getByLabelText("open drawer"));
     });
 
-    const drawerContent = screen.getByText("Overview").closest("[role='presentation']")!;
+    const drawerContent = screen.getByText("Overview").closest("[role='presentation']");
+
+    expect(drawerContent).not.toBeNull();
 
     await act(async () => {
         const event = new KeyboardEvent("keydown", { bubbles: true, key: "Tab" });
-        drawerContent.dispatchEvent(event);
+        drawerContent?.dispatchEvent(event);
     });
 
     expect(screen.getByRole("presentation")).toBeInTheDocument();
@@ -143,11 +147,13 @@ it("does not close drawer on Shift keydown event", async () => {
         fireEvent.click(screen.getByLabelText("open drawer"));
     });
 
-    const drawerContent = screen.getByText("Overview").closest("[role='presentation']")!;
+    const drawerContent = screen.getByText("Overview").closest("[role='presentation']");
+
+    expect(drawerContent).not.toBeNull();
 
     await act(async () => {
         const event = new KeyboardEvent("keydown", { bubbles: true, key: "Shift" });
-        drawerContent.dispatchEvent(event);
+        drawerContent?.dispatchEvent(event);
     });
 
     expect(screen.getByRole("presentation")).toBeInTheDocument();
