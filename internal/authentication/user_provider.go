@@ -8,6 +8,9 @@ import (
 type UserProvider interface {
 	model.StartupCheck
 
+	// CreateUser creates a user in the authentication backend.
+	CreateUser(details UserDetailsCreate) (err error)
+
 	// CheckUserPassword is used to check if a password matches for a specific user.
 	CheckUserPassword(username string, password string) (valid bool, err error)
 
@@ -23,4 +26,14 @@ type UserProvider interface {
 	ChangePassword(username string, oldPassword string, newPassword string) (err error)
 
 	Close() (err error)
+}
+
+// UserDetailsCreate is the model used to create a user in the authentication backend.
+type UserDetailsCreate struct {
+	Username    string
+	Password    string
+	DisplayName string
+	Email       string
+	Groups      []string
+	Disabled    bool
 }

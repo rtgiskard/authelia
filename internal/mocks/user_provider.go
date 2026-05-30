@@ -16,6 +16,20 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// CreateUser mocks base method.
+func (m *MockUserProvider) CreateUser(details authentication.UserDetailsCreate) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUser", details)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateUser indicates an expected call of CreateUser.
+func (mr *MockUserProviderMockRecorder) CreateUser(details any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockUserProvider)(nil).CreateUser), details)
+}
+
 // MockUserProvider is a mock of UserProvider interface.
 type MockUserProvider struct {
 	ctrl     *gomock.Controller

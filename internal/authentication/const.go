@@ -137,6 +137,8 @@ var (
 
 	ErrAuthenticationFailed = errors.New("authentication failed")
 
+	ErrUserAlreadyExists = errors.New("user already exists")
+
 	ErrLDAPHealthCheckFailedEntryCount = errors.New("incorrect number entries found when performing RootDSE search")
 )
 
