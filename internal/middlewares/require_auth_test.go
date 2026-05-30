@@ -256,6 +256,115 @@ func TestRequireElevated(t *testing.T) {
 	}
 }
 
+func TestRequireAdministration(t *testing.T) {
+	testCases := []struct {
+		name     string
+		level    authentication.Level
+		config   schema.Administration
+		setup    func(mock *mocks.MockAutheliaCtx)
+		expected int
+	}{
+		{
+			"ShouldDenyAnonymousUser",
+			authentication.NotAuthenticated,
+			schema.Administration{Enable: true, Users: []string{john}},
+			nil,
+			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldDenyOneFactorUser",
+			authentication.OneFactor,
+			schema.Administration{Enable: true, Users: []string{john}},
+			nil,
+			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldAllowConfiguredUserWithTwoFactors",
+			authentication.TwoFactor,
+			schema.Administration{Enable: true, Users: []string{john}},
+			nil,
+			fasthttp.StatusOK,
+		},
+		{
+			"ShouldAllowConfiguredGroupWithTwoFactors",
+			authentication.TwoFactor,
+			schema.Administration{Enable: true, Groups: []string{"admins"}},
+			func(mock *mocks.MockAutheliaCtx) {
+				mock.UserProviderMock.EXPECT().GetDetails(john).Return(&authentication.UserDetails{Username: john, Groups: []string{"admins"}}, nil)
+			},
+			fasthttp.StatusOK,
+		},
+		{
+			"ShouldDenyUnconfiguredUserWithTwoFactors",
+			authentication.TwoFactor,
+			schema.Administration{Enable: true, Groups: []string{"admins"}},
+			func(mock *mocks.MockAutheliaCtx) {
+				mock.UserProviderMock.EXPECT().GetDetails(john).Return(&authentication.UserDetails{Username: john, Groups: []string{"users"}}, nil)
+			},
+			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldDenyWhenNoAdministratorsConfigured",
+			authentication.TwoFactor,
+			schema.Administration{Enable: true},
+			nil,
+			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldDenyWhenUserDetailsLookupFails",
+			authentication.TwoFactor,
+			schema.Administration{Enable: true, Groups: []string{"admins"}},
+			func(mock *mocks.MockAutheliaCtx) {
+				mock.UserProviderMock.EXPECT().GetDetails(john).Return(nil, errors.New("lookup failed"))
+			},
+			fasthttp.StatusForbidden,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := mocks.NewMockAutheliaCtx(t)
+
+			defer mock.Close()
+
+			mock.Ctx.Configuration.Administration = tc.config
+
+			userSession, err := mock.Ctx.GetSession()
+			require.NoError(t, err)
+
+			switch tc.level {
+			case authentication.OneFactor:
+				userSession.Username = john
+				userSession.AuthenticationMethodRefs.UsernameAndPassword = true
+				userSession.AuthenticationMethodRefs.WebAuthn = false
+			case authentication.TwoFactor:
+				userSession.Username = john
+				userSession.AuthenticationMethodRefs.UsernameAndPassword = true
+				userSession.AuthenticationMethodRefs.WebAuthn = true
+			case authentication.NotAuthenticated:
+				userSession.AuthenticationMethodRefs.UsernameAndPassword = false
+				userSession.AuthenticationMethodRefs.WebAuthn = false
+			}
+
+			require.NoError(t, mock.Ctx.SaveSession(userSession))
+
+			if tc.setup != nil {
+				tc.setup(mock)
+			}
+
+			handler := middlewares.RequireAdministration(NilHandler)
+
+			handler(mock.Ctx)
+
+			assert.Equal(t, tc.expected, mock.Ctx.Response.StatusCode())
+
+			if tc.expected == fasthttp.StatusOK {
+				assert.Equal(t, "Example Nil", string(mock.Ctx.Response.Body()))
+			}
+		})
+	}
+}
+
 func NilHandler(ctx *middlewares.AutheliaCtx) {
 	ctx.SetContentTypeTextPlain()
 	ctx.Response.SetBodyString("Example Nil")
