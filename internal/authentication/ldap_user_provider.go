@@ -80,6 +80,11 @@ func NewLDAPUserProviderWithFactory(config *schema.AuthenticationBackendLDAP, di
 	return provider
 }
 
+// CreateUser creates a new user in the LDAP backend.
+func (p *LDAPUserProvider) CreateUser(details UserDetailsCreate) (err error) {
+	return ErrOperationFailed
+}
+
 // CheckUserPassword checks if provided password matches for the given user.
 func (p *LDAPUserProvider) CheckUserPassword(username string, password string) (valid bool, err error) {
 	var (
