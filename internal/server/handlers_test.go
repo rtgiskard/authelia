@@ -393,10 +393,10 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 			fasthttp.StatusForbidden,
 		},
 		{
-			"ShouldReturnSkeletonResponseForAuthorizedUser",
+			"ShouldReturnBadRequestForAuthorizedUserWithInvalidBody",
 			schema.Administration{Enable: true, Users: []string{"john"}},
 			&session.UserSession{Username: "john"},
-			fasthttp.StatusNotImplemented,
+			fasthttp.StatusBadRequest,
 		},
 	}
 
