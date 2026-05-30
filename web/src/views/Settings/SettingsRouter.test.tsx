@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { act, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -23,10 +25,11 @@ vi.mock("@constants/Routes", () => ({
     SecuritySubRoute: "/security",
     SettingsRoute: "/settings",
     SettingsTwoFactorAuthenticationSubRoute: "/two-factor-authentication",
+    SettingsUserManagementSubRoute: "/user-management",
 }));
 
 vi.mock("@layouts/SettingsLayout", () => ({
-    default: (props: any) => <div>{props.children}</div>,
+    default: (props: { children?: ReactNode }) => <div>{props.children}</div>,
 }));
 
 vi.mock("@views/Settings/SettingsView", () => ({
@@ -39,6 +42,10 @@ vi.mock("@views/Settings/Security/SecurityView", () => ({
 
 vi.mock("@views/Settings/TwoFactorAuthentication/TwoFactorAuthenticationView", () => ({
     default: () => <div data-testid="2fa-view" />,
+}));
+
+vi.mock("@views/Settings/UserManagement/UserManagementView", () => ({
+    default: () => <div data-testid="user-management-view" />,
 }));
 
 beforeEach(() => {
