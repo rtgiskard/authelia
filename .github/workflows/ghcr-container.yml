@@ -140,6 +140,7 @@ jobs:
             printf "EOF\n"
             printf "commit=%s\n" "${commit}"
             printf "build-tag=%s\n" "${build_tag}"
+            printf "image-version=%s\n" "${build_tag#v}"
             printf "build-state=%s\n" "${build_state}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -228,8 +229,8 @@ jobs:
           set -euo pipefail
 
           base_tag="latest"
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            base_tag="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?$ ]]; then
+            base_tag="${BASH_REMATCH[1]}"
           fi
 
           digest="$(docker buildx imagetools inspect "authelia/base:${base_tag}" --format '{{ json . }}' | jq -r '.manifest.digest')"
@@ -253,6 +254,7 @@ jobs:
             type=sha,prefix=sha-
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.build-meta.outputs.image-version }},enable=${{ github.ref_type == 'tag' }}
           labels: |
             org.opencontainers.image.authors=rtgiskard
             org.opencontainers.image.source=https://github.com/rtgiskard/authelia
