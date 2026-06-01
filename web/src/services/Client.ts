@@ -1,17 +1,11 @@
 import axios from "axios";
 
-import {
-    RateLimitedData,
-    ServiceResponse,
-    hasServiceError,
-    toData,
-    toDataRateLimited,
-    validateStatusTooManyRequests,
-} from "@services/Api";
+import type { RateLimitedData, ServiceResponse } from "@services/Api";
+import { hasServiceError, toData, toDataRateLimited, validateStatusTooManyRequests } from "@services/Api";
 
 export async function PutWithOptionalResponse<T = undefined>(
     path: string,
-    body?: any,
+    body?: unknown,
     signal?: AbortSignal,
 ): Promise<T | undefined> {
     const res = await axios.put<ServiceResponse<T>>(path, body, { signal });
@@ -25,7 +19,7 @@ export async function PutWithOptionalResponse<T = undefined>(
 
 export async function PostWithOptionalResponse<T = undefined>(
     path: string,
-    body?: any,
+    body?: unknown,
     signal?: AbortSignal,
 ): Promise<T | undefined> {
     const res = await axios.post<ServiceResponse<T>>(path, body, { signal });
@@ -39,7 +33,7 @@ export async function PostWithOptionalResponse<T = undefined>(
 
 export async function PostWithOptionalResponseRateLimited<T = undefined>(
     path: string,
-    body?: any,
+    body?: unknown,
     signal?: AbortSignal,
 ): Promise<RateLimitedData<T> | undefined> {
     const res = await axios.post<ServiceResponse<T>>(path, body, {
@@ -60,10 +54,13 @@ export async function PostWithOptionalResponseRateLimited<T = undefined>(
 
 export async function DeleteWithOptionalResponse<T = undefined>(
     path: string,
-    body?: any,
+    body?: unknown,
     signal?: AbortSignal,
 ): Promise<T | undefined> {
-    const res = await axios.delete<ServiceResponse<T>>(path, { data: body, signal });
+    const res = await axios.delete<ServiceResponse<T>>(path, {
+        data: body,
+        signal,
+    });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
         throw new Error(`Failed DELETE to ${path}. Code: ${res.status}. Message: ${hasServiceError(res).message}`);
@@ -72,7 +69,21 @@ export async function DeleteWithOptionalResponse<T = undefined>(
     return toData<T>(res);
 }
 
-export async function Post<T>(path: string, body?: any, signal?: AbortSignal) {
+export async function PatchWithOptionalResponse<T = undefined>(
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+): Promise<T | undefined> {
+    const res = await axios.patch<ServiceResponse<T>>(path, body, { signal });
+
+    if (res.status !== 200 || hasServiceError(res).errored) {
+        throw new Error(`Failed PATCH to ${path}. Code: ${res.status}. Message: ${hasServiceError(res).message}`);
+    }
+
+    return toData<T>(res);
+}
+
+export async function Post<T>(path: string, body?: unknown, signal?: AbortSignal) {
     const res = await PostWithOptionalResponse<T>(path, body, signal);
 
     if (!res) {
@@ -82,7 +93,7 @@ export async function Post<T>(path: string, body?: any, signal?: AbortSignal) {
     return res;
 }
 
-export async function Put<T>(path: string, body?: any, signal?: AbortSignal) {
+export async function Put<T>(path: string, body?: unknown, signal?: AbortSignal) {
     const res = await PutWithOptionalResponse<T>(path, body, signal);
 
     if (!res) {
@@ -126,4 +137,14 @@ export async function GetWithOptionalData<T = undefined>(path: string, signal?: 
     }
 
     return d;
+}
+
+export async function Patch<T>(path: string, body?: unknown, signal?: AbortSignal) {
+    const res = await PatchWithOptionalResponse<T>(path, body, signal);
+
+    if (!res) {
+        throw new Error("unexpected type of response");
+    }
+
+    return res;
 }
