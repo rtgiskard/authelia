@@ -135,7 +135,7 @@ Manage Access Control rules.
 
 {{< roadmap-status >}}
 
-Manage user accounts with either the internal or LDAP authentication backends. Allow for creation, modification, and
-deletion.
-
+Manage user accounts with the file authentication backend first, including creation, modification, enablement,
+disablement, and password reset. LDAP-backed accounts are treated as read-only for the initial implementation except for
+existing supported password reset flows, with broader LDAP write support reserved for a later design.
 
