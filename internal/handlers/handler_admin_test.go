@@ -35,7 +35,7 @@ func TestAdminUsersPOST_ShouldSucceed(t *testing.T) {
 
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	mock.UserProviderMock.EXPECT().
 		CreateUser(authentication.UserDetailsCreate{
@@ -64,7 +64,7 @@ func TestAdminUsersPOST_ShouldSucceedWithoutEmailNotificationWhenBlank(t *testin
 	body := adminCreateUserRequestBody{Username: "john", Password: testPasswordNew, DisplayName: "John Doe"}
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	mock.UserProviderMock.EXPECT().CreateUser(authentication.UserDetailsCreate{Username: "john", Password: testPasswordNew, DisplayName: "John Doe", Groups: []string{}}).Return(nil)
 
@@ -91,7 +91,7 @@ func TestAdminUsersPOST_ShouldNotExposeNotifierError(t *testing.T) {
 
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	mock.UserProviderMock.EXPECT().
 		CreateUser(authentication.UserDetailsCreate{
@@ -136,7 +136,7 @@ func TestAdminUsersPOST_ShouldFailWhenPasswordPolicyNotMet(t *testing.T) {
 
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	AdminUsersPOST(mock.Ctx)
 
@@ -161,7 +161,7 @@ func TestAdminUsersPOST_ShouldFailWhenUserAlreadyExists(t *testing.T) {
 
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	mock.UserProviderMock.EXPECT().
 		CreateUser(authentication.UserDetailsCreate{
@@ -195,7 +195,7 @@ func TestAdminUsersPOST_ShouldReturnUnsupported(t *testing.T) {
 
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	mock.UserProviderMock.EXPECT().
 		CreateUser(authentication.UserDetailsCreate{
@@ -216,7 +216,7 @@ func TestAdminUsersPOST_ShouldFailWhenRequestBodyIsInvalid(t *testing.T) {
 
 	defer mock.Close()
 
-	mock.Ctx.Request.SetBody([]byte(`{invalid json`))
+	adminSetJSONBody(mock.Ctx, []byte(`{invalid json`))
 
 	AdminUsersPOST(mock.Ctx)
 
@@ -225,6 +225,19 @@ func TestAdminUsersPOST_ShouldFailWhenRequestBodyIsInvalid(t *testing.T) {
 	assert.Equal(t, "KO", errResponse.Status)
 	assert.Equal(t, messageUnableToCreateUser, errResponse.Message)
 	mock.AssertLogEntryAdvanced(t, 0, logrus.ErrorLevel, regexp.MustCompile(`^unable to parse body: .+`), map[string]any{})
+}
+
+func TestAdminUsersPOST_ShouldRejectNonJSONContentType(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.Request.Header.SetContentType("text/plain")
+	mock.Ctx.Request.SetBody([]byte(`{"username":"john","password":"password","display_name":"John Doe"}`))
+
+	AdminUsersPOST(mock.Ctx)
+
+	mock.AssertKO(t, fasthttp.StatusMessage(fasthttp.StatusUnsupportedMediaType), fasthttp.StatusUnsupportedMediaType)
 }
 
 func TestAdminUserCapabilitiesGET_ShouldSucceed(t *testing.T) {
@@ -280,7 +293,7 @@ func TestAdminUserPATCH_ShouldSucceed(t *testing.T) {
 	body := adminUpdateUserRequestBody{DisplayName: &displayName, Groups: &groups, Disabled: &disabled}
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	trimmed := "John Doe"
 	normalized := []string{"admins", "users"}
@@ -302,11 +315,25 @@ func TestAdminUserPATCH_ShouldRejectBlankDisplayName(t *testing.T) {
 	displayName := "   "
 	bodyBytes, err := json.Marshal(adminUpdateUserRequestBody{DisplayName: &displayName})
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	AdminUserPATCH(mock.Ctx)
 
 	mock.AssertKO(t, messageDisplayNameRequired, fasthttp.StatusBadRequest)
+}
+
+func TestAdminUserPATCH_ShouldRejectNonJSONContentType(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.SetUserValue("username", "john")
+	mock.Ctx.Request.Header.SetContentType("text/plain")
+	mock.Ctx.Request.SetBody([]byte(`{"display_name":"John Doe"}`))
+
+	AdminUserPATCH(mock.Ctx)
+
+	mock.AssertKO(t, fasthttp.StatusMessage(fasthttp.StatusUnsupportedMediaType), fasthttp.StatusUnsupportedMediaType)
 }
 
 func TestAdminUserPasswordPUT_ShouldRejectWeakPassword(t *testing.T) {
@@ -318,7 +345,7 @@ func TestAdminUserPasswordPUT_ShouldRejectWeakPassword(t *testing.T) {
 	mock.Ctx.SetUserValue("username", "john")
 	bodyBytes, err := json.Marshal(adminResetPasswordRequestBody{Password: "weak"})
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	AdminUserPasswordPUT(mock.Ctx)
 
@@ -334,10 +361,29 @@ func TestAdminUserPasswordPUT_ShouldReturnUnsupported(t *testing.T) {
 	mock.Ctx.SetUserValue("username", "john")
 	bodyBytes, err := json.Marshal(adminResetPasswordRequestBody{Password: testPasswordNew})
 	assert.NoError(t, err)
-	mock.Ctx.Request.SetBody(bodyBytes)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
 	mock.UserProviderMock.EXPECT().AdminResetUserPassword("john", testPasswordNew).Return(authentication.ErrUnsupportedOperation)
 
 	AdminUserPasswordPUT(mock.Ctx)
 
 	mock.AssertKO(t, messageProviderOperationUnsupported, fasthttp.StatusNotImplemented)
+}
+
+func TestAdminUserPasswordPUT_ShouldRejectNonJSONContentType(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.SetUserValue("username", "john")
+	mock.Ctx.Request.Header.SetContentType("text/plain")
+	mock.Ctx.Request.SetBody([]byte(`{"password":"password"}`))
+
+	AdminUserPasswordPUT(mock.Ctx)
+
+	mock.AssertKO(t, fasthttp.StatusMessage(fasthttp.StatusUnsupportedMediaType), fasthttp.StatusUnsupportedMediaType)
+}
+
+func adminSetJSONBody(ctx *middlewares.AutheliaCtx, body []byte) {
+	ctx.Request.Header.SetContentType("application/json")
+	ctx.Request.SetBody(body)
 }

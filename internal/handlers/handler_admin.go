@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"mime"
 	"net/mail"
 	"strings"
 
@@ -20,6 +21,10 @@ const (
 
 // AdminUsersPOST is the administrator user creation endpoint.
 func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
+	if !adminRequireJSONContentType(ctx) {
+		return
+	}
+
 	body := adminCreateUserRequestBody{}
 
 	if err := ctx.ParseBody(&body); err != nil {
@@ -96,6 +101,10 @@ func AdminUserGET(ctx *middlewares.AutheliaCtx) {
 }
 
 func AdminUserPATCH(ctx *middlewares.AutheliaCtx) {
+	if !adminRequireJSONContentType(ctx) {
+		return
+	}
+
 	body := adminUpdateUserRequestBody{}
 
 	if err := ctx.ParseBody(&body); err != nil {
@@ -132,6 +141,10 @@ func AdminUserPATCH(ctx *middlewares.AutheliaCtx) {
 }
 
 func AdminUserPasswordPUT(ctx *middlewares.AutheliaCtx) {
+	if !adminRequireJSONContentType(ctx) {
+		return
+	}
+
 	body := adminResetPasswordRequestBody{}
 
 	if err := ctx.ParseBody(&body); err != nil {
@@ -193,6 +206,18 @@ func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.
 func adminUserPathUsername(ctx *middlewares.AutheliaCtx) string {
 	username, _ := ctx.UserValue(adminUserPathParamUsername).(string)
 	return username
+}
+
+func adminRequireJSONContentType(ctx *middlewares.AutheliaCtx) bool {
+	mediaType, _, err := mime.ParseMediaType(string(ctx.Request.Header.ContentType()))
+	if err == nil && mediaType == "application/json" {
+		return true
+	}
+
+	ctx.SetJSONError(fasthttp.StatusMessage(fasthttp.StatusUnsupportedMediaType))
+	ctx.SetStatusCode(fasthttp.StatusUnsupportedMediaType)
+
+	return false
 }
 
 func normalizeGroups(groups []string) []string {
