@@ -82,7 +82,31 @@ func NewLDAPUserProviderWithFactory(config *schema.AuthenticationBackendLDAP, di
 
 // CreateUser creates a new user in the LDAP backend.
 func (p *LDAPUserProvider) CreateUser(details UserDetailsCreate) (err error) {
-	return ErrOperationFailed
+	return ErrUnsupportedOperation
+}
+
+func (p *LDAPUserProvider) AdminCapabilities() (capabilities UserProviderAdminCapabilities) {
+	return UserProviderAdminCapabilities{Create: false, List: false, Read: false, Update: false, ResetPassword: !p.disableResetPassword, Delete: false}
+}
+
+func (p *LDAPUserProvider) AdminListUsers(filter UserProviderAdminListFilter) (result UserProviderAdminListResult, err error) {
+	return result, ErrUnsupportedOperation
+}
+
+func (p *LDAPUserProvider) AdminGetUser(username string) (details UserProviderAdminUserDetails, err error) {
+	return details, ErrUnsupportedOperation
+}
+
+func (p *LDAPUserProvider) AdminUpdateUser(username string, details UserProviderAdminUserUpdate) (updated UserProviderAdminUserDetails, err error) {
+	return updated, ErrUnsupportedOperation
+}
+
+func (p *LDAPUserProvider) AdminResetUserPassword(username string, password string) (err error) {
+	if p.disableResetPassword {
+		return ErrUnsupportedOperation
+	}
+
+	return p.UpdatePassword(username, password)
 }
 
 // CheckUserPassword checks if provided password matches for the given user.
