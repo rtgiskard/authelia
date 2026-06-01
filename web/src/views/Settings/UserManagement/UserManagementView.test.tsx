@@ -77,6 +77,24 @@ it("shows an unsupported state when the backend does not support user management
     ).toBeInTheDocument();
 });
 
+it("shows listing unavailable instead of unsupported when only password reset is available", async () => {
+    const { getAdminUserManagementCapabilities } = await import("@services/AdminUsers");
+
+    vi.mocked(getAdminUserManagementCapabilities).mockResolvedValue({
+        can_create: false,
+        can_list: false,
+        can_notify: false,
+        can_reset_password: true,
+        can_update: false,
+        supported: true,
+    });
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByText("User Listing Unavailable", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("User Management Unsupported")).not.toBeInTheDocument();
+});
+
 it("renders users returned by the list endpoint", async () => {
     const { getAdminUserManagementCapabilities, listAdminUsers } = await import("@services/AdminUsers");
 
