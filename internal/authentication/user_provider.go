@@ -11,6 +11,16 @@ type UserProvider interface {
 	// CreateUser creates a user in the authentication backend.
 	CreateUser(details UserDetailsCreate) (err error)
 
+	AdminCapabilities() (capabilities UserProviderAdminCapabilities)
+
+	AdminListUsers(filter UserProviderAdminListFilter) (result UserProviderAdminListResult, err error)
+
+	AdminGetUser(username string) (details UserProviderAdminUserDetails, err error)
+
+	AdminUpdateUser(username string, details UserProviderAdminUserUpdate) (updated UserProviderAdminUserDetails, err error)
+
+	AdminResetUserPassword(username string, password string) (err error)
+
 	// CheckUserPassword is used to check if a password matches for a specific user.
 	CheckUserPassword(username string, password string) (valid bool, err error)
 
@@ -36,4 +46,37 @@ type UserDetailsCreate struct {
 	Email       string
 	Groups      []string
 	Disabled    bool
+}
+
+type UserProviderAdminCapabilities struct {
+	Create        bool `json:"create"`
+	List          bool `json:"list"`
+	Read          bool `json:"read"`
+	Update        bool `json:"update"`
+	ResetPassword bool `json:"reset_password"`
+	Delete        bool `json:"delete"`
+}
+
+type UserProviderAdminListFilter struct {
+	Search string
+}
+
+type UserProviderAdminListResult struct {
+	Users []UserProviderAdminUserDetails `json:"users"`
+	Total int                            `json:"total"`
+}
+
+type UserProviderAdminUserDetails struct {
+	Username    string   `json:"username"`
+	DisplayName string   `json:"display_name"`
+	Email       string   `json:"email"`
+	Groups      []string `json:"groups"`
+	Disabled    bool     `json:"disabled"`
+}
+
+type UserProviderAdminUserUpdate struct {
+	DisplayName *string
+	Email       *string
+	Groups      *[]string
+	Disabled    *bool
 }
