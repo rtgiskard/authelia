@@ -45,6 +45,31 @@ func TestDatabaseModel_Read(t *testing.T) {
 	assert.EqualError(t, model.Read(f), "could not parse the YAML database: yaml: while scanning for the next token at line 2: found character that cannot start any token")
 }
 
+func TestDatabaseModel_WriteShouldPreserveExistingFileWhenTempFileCannotBeCreated(t *testing.T) {
+	dir := t.TempDir()
+	fileName := filepath.Join(dir, "users_database.yml")
+	original := []byte("users:\n  john:\n    password: original\n")
+
+	require.NoError(t, os.WriteFile(fileName, original, fileAuthenticationMode))
+	require.NoError(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() {
+		_ = os.Chmod(dir, 0700)
+	})
+
+	model := &FileDatabaseModel{Users: map[string]FileDatabaseUserDetailsModel{
+		"jane": {
+			Password:    "replacement",
+			DisplayName: "Jane Doe",
+		},
+	}}
+
+	assert.Error(t, model.Write(fileName))
+
+	content, err := os.ReadFile(fileName)
+	require.NoError(t, err)
+	assert.Equal(t, original, content)
+}
+
 //nolint:gosec // Test Credentials.
 func TestDatabaseModelExtended(t *testing.T) {
 	mustParseURI := func(in string) *url.URL {

@@ -5,6 +5,7 @@ import (
 	"maps"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -534,13 +535,68 @@ func (m *FileDatabaseModel) Read(filePath string) (err error) {
 func (m *FileDatabaseModel) Write(fileName string) (err error) {
 	var (
 		data []byte
+		file *os.File
 	)
 
 	if data, err = yaml.Marshal(m); err != nil {
 		return err
 	}
 
-	return os.WriteFile(fileName, data, fileAuthenticationMode)
+	dir := filepath.Dir(fileName)
+
+	if file, err = os.CreateTemp(dir, ".users_database_*.tmp"); err != nil {
+		return err
+	}
+
+	tempName := file.Name()
+	removeTemp := true
+
+	defer func() {
+		if removeTemp {
+			_ = os.Remove(tempName)
+		}
+	}()
+
+	if err = file.Chmod(fileAuthenticationMode); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	if _, err = file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	if err = file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	if err = file.Close(); err != nil {
+		return err
+	}
+
+	if err = os.Rename(tempName, fileName); err != nil {
+		return err
+	}
+
+	removeTemp = false
+
+	dirFile, err := os.Open(dir)
+	if err != nil {
+		return fmt.Errorf("failed to open the parent directory for sync: %w", err)
+	}
+
+	if err = dirFile.Sync(); err != nil {
+		_ = dirFile.Close()
+		return fmt.Errorf("failed to sync the parent directory: %w", err)
+	}
+
+	if err = dirFile.Close(); err != nil {
+		return fmt.Errorf("failed to close the parent directory: %w", err)
+	}
+
+	return nil
 }
 
 // FileDatabaseUserDetailsModel is the model of user details in the file database.
