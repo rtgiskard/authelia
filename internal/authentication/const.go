@@ -139,6 +139,8 @@ var (
 
 	ErrUserAlreadyExists = errors.New("user already exists")
 
+	ErrUnsupportedOperation = errors.New("operation unsupported by authentication provider")
+
 	ErrLDAPHealthCheckFailedEntryCount = errors.New("incorrect number entries found when performing RootDSE search")
 )
 
