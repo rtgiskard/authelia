@@ -486,6 +486,10 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 					req.Header.SetMethod(route.method)
 					req.Header.Set(fasthttp.HeaderXForwardedHost, "login.example.com:8080")
 					req.Header.Set(fasthttp.HeaderXForwardedProto, "https")
+					if tc.name == "ShouldReturnBadRequestForAuthorizedUserWithInvalidBody" {
+						req.Header.SetContentType("application/json")
+						req.SetBodyString("{invalid json")
+					}
 					req.SetRequestURI(route.path)
 					ctx.Init(&req, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}, nil)
 
