@@ -182,7 +182,7 @@ func TestHandlerMainWithAuthzEndpoints(t *testing.T) {
 	provider, err := templates.New(templates.Config{})
 	require.NoError(t, err)
 
-	require.NoError(t, provider.LoadTemplatedAssets(assets))
+	require.NoError(t, provider.LoadTemplatedAssets(&ReadFileOpenAPI{}))
 
 	testCases := []struct {
 		name  string
@@ -257,7 +257,7 @@ func TestHandlerMainWithOptionalFeatures(t *testing.T) {
 	provider, err := templates.New(templates.Config{})
 	require.NoError(t, err)
 
-	require.NoError(t, provider.LoadTemplatedAssets(assets))
+	require.NoError(t, provider.LoadTemplatedAssets(&ReadFileOpenAPI{}))
 
 	testCases := []struct {
 		name    string
@@ -372,30 +372,52 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 	provider, err := templates.New(templates.Config{})
 	require.NoError(t, err)
 
-	require.NoError(t, provider.LoadTemplatedAssets(assets))
+	require.NoError(t, provider.LoadTemplatedAssets(&ReadFileOpenAPI{}))
+
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{fasthttp.MethodGet, "/admin/api/v1/users/capabilities"},
+		{fasthttp.MethodGet, "/admin/api/v1/users"},
+		{fasthttp.MethodPost, "/admin/api/v1/users"},
+		{fasthttp.MethodGet, "/admin/api/v1/users/john"},
+		{fasthttp.MethodPatch, "/admin/api/v1/users/john"},
+		{fasthttp.MethodPut, "/admin/api/v1/users/john/password"},
+	}
 
 	testCases := []struct {
-		name               string
-		administration     schema.Administration
-		session            *session.UserSession
+		name           string
+		administration schema.Administration
+		session        *session.UserSession
+		routes         []struct {
+			method string
+			path   string
+		}
 		expectedStatusCode int
 	}{
 		{
-			"ShouldNotRegisterRouteByDefault",
+			"ShouldNotRegisterRoutesByDefault",
 			schema.Administration{},
 			nil,
+			routes,
 			fasthttp.StatusNotFound,
 		},
 		{
-			"ShouldDenyEnabledRouteWithoutSession",
+			"ShouldDenyEnabledRoutesWithoutSession",
 			schema.Administration{Enable: true, Users: []string{"john"}},
 			nil,
+			routes,
 			fasthttp.StatusForbidden,
 		},
 		{
 			"ShouldReturnBadRequestForAuthorizedUserWithInvalidBody",
 			schema.Administration{Enable: true, Users: []string{"john"}},
 			&session.UserSession{Username: "john"},
+			[]struct {
+				method string
+				path   string
+			}{{fasthttp.MethodPost, "/admin/api/v1/users"}},
 			fasthttp.StatusBadRequest,
 		},
 	}
@@ -427,14 +449,7 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 			handler, err := handlerMain(t.Context(), config, providers)
 			require.NoError(t, err)
 
-			var ctx fasthttp.RequestCtx
-			var req fasthttp.Request
-
-			req.Header.SetMethod(fasthttp.MethodPost)
-			req.Header.Set(fasthttp.HeaderXForwardedHost, "login.example.com:8080")
-			req.Header.Set(fasthttp.HeaderXForwardedProto, "https")
-			req.SetRequestURI("/admin/api/v1/users")
-			ctx.Init(&req, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}, nil)
+			var sessionCookie string
 
 			if tc.session != nil {
 				var sessionCtx fasthttp.RequestCtx
@@ -460,13 +475,30 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 				matches := regexp.MustCompile(`^authelia_session=([^;]+);`).FindStringSubmatch(string(sessionCtx.Response.Header.PeekCookie("authelia_session")))
 				require.Len(t, matches, 2)
 
-				ctx.Request.Header.SetCookie("authelia_session", matches[1])
-				ctx.Request.Header.SetHost("login.example.com:8080")
+				sessionCookie = matches[1]
 			}
 
-			handler(&ctx)
+			for _, route := range tc.routes {
+				t.Run(route.method+" "+route.path, func(t *testing.T) {
+					var ctx fasthttp.RequestCtx
+					var req fasthttp.Request
 
-			assert.Equal(t, tc.expectedStatusCode, ctx.Response.StatusCode())
+					req.Header.SetMethod(route.method)
+					req.Header.Set(fasthttp.HeaderXForwardedHost, "login.example.com:8080")
+					req.Header.Set(fasthttp.HeaderXForwardedProto, "https")
+					req.SetRequestURI(route.path)
+					ctx.Init(&req, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}, nil)
+
+					if sessionCookie != "" {
+						ctx.Request.Header.SetCookie("authelia_session", sessionCookie)
+						ctx.Request.Header.SetHost("login.example.com:8080")
+					}
+
+					handler(&ctx)
+
+					assert.Equal(t, tc.expectedStatusCode, ctx.Response.StatusCode())
+				})
+			}
 		})
 	}
 }
