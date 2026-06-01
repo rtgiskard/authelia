@@ -2,6 +2,7 @@ package authentication
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"strings"
@@ -22,6 +23,8 @@ type FileUserProviderDatabase interface {
 	Load() (err error)
 	CreateUserDetails(username string, details *FileUserDatabaseUserDetails) (err error)
 	GetUserDetails(username string) (user FileUserDatabaseUserDetails, err error)
+	ListUserDetails() (users []FileUserDatabaseUserDetails, err error)
+	UpdateUserDetails(username string, update func(details *FileUserDatabaseUserDetails) (err error)) (user FileUserDatabaseUserDetails, err error)
 	SetUserDetails(username string, details *FileUserDatabaseUserDetails)
 }
 
@@ -174,26 +177,47 @@ func (m *FileUserDatabase) GetUserDetails(username string) (user FileUserDatabas
 	return user, ErrUserNotFound
 }
 
+func (m *FileUserDatabase) ListUserDetails() (users []FileUserDatabaseUserDetails, err error) {
+	m.RLock()
+
+	defer m.RUnlock()
+
+	users = make([]FileUserDatabaseUserDetails, 0, len(m.Users))
+
+	for username, details := range m.Users {
+		details.Username = username
+		users = append(users, details)
+	}
+
+	return users, nil
+}
+
 func (m *FileUserDatabase) getUserDetails(username string) (user FileUserDatabaseUserDetails, ok bool) {
+	user, _, ok = m.getUserDetailsWithKey(username)
+
+	return user, ok
+}
+
+func (m *FileUserDatabase) getUserDetailsWithKey(username string) (user FileUserDatabaseUserDetails, key string, ok bool) {
 	u := strings.ToLower(username)
 
 	if m.SearchEmail {
 		if key, ok := m.Emails[u]; ok {
-			return m.Users[key], true
+			return m.Users[key], key, true
 		}
 	}
 
 	if m.SearchCI {
 		if key, ok := m.Aliases[u]; ok {
-			return m.Users[key], true
+			return m.Users[key], key, true
 		}
 	}
 
 	if details, ok := m.Users[username]; ok {
-		return details, true
+		return details, username, true
 	}
 
-	return user, false
+	return user, "", false
 }
 
 // CreateUserDetails creates the FileUserDatabaseUserDetails for a given user atomically.
@@ -211,12 +235,12 @@ func (m *FileUserDatabase) CreateUserDetails(username string, details *FileUserD
 	}
 
 	users := make(map[string]FileUserDatabaseUserDetails, len(m.Users)+1)
+	maps.Copy(users, m.Users)
 
-	for user, existing := range m.Users {
-		users[user] = existing
-	}
+	created := *details
+	created.Username = username
 
-	users[username] = *details
+	users[username] = created
 
 	database := &FileUserDatabase{
 		RWMutex:     &sync.RWMutex{},
@@ -242,6 +266,56 @@ func (m *FileUserDatabase) CreateUserDetails(username string, details *FileUserD
 	m.Aliases = database.Aliases
 
 	return nil
+}
+
+func (m *FileUserDatabase) UpdateUserDetails(username string, update func(details *FileUserDatabaseUserDetails) (err error)) (user FileUserDatabaseUserDetails, err error) {
+	m.Lock()
+
+	defer m.Unlock()
+
+	existing, key, ok := m.getUserDetailsWithKey(username)
+	if !ok {
+		return user, ErrUserNotFound
+	}
+
+	updated := existing
+	updated.Username = key
+
+	if err = update(&updated); err != nil {
+		return user, err
+	}
+
+	users := make(map[string]FileUserDatabaseUserDetails, len(m.Users))
+	maps.Copy(users, m.Users)
+
+	users[key] = updated
+
+	database := &FileUserDatabase{
+		RWMutex:     &sync.RWMutex{},
+		Users:       users,
+		Emails:      map[string]string{},
+		Aliases:     map[string]string{},
+		Path:        m.Path,
+		SearchEmail: m.SearchEmail,
+		SearchCI:    m.SearchCI,
+		Extra:       m.Extra,
+	}
+
+	if err = database.LoadAliases(); err != nil {
+		return user, err
+	}
+
+	if err = database.ToDatabaseModel().Write(m.Path); err != nil {
+		return user, err
+	}
+
+	m.Users = database.Users
+	m.Emails = database.Emails
+	m.Aliases = database.Aliases
+
+	updated.Username = key
+
+	return updated, nil
 }
 
 // SetUserDetails sets the FileUserDatabaseUserDetails for a given user.

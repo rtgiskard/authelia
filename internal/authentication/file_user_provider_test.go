@@ -544,8 +544,7 @@ func TestShouldChangePasswordSaveError(t *testing.T) {
 		gomock.InOrder(
 			mock.EXPECT().GetUserDetails("john").Return(details, nil),
 			mock.EXPECT().GetUserDetails("john").Return(details, nil),
-			mock.EXPECT().SetUserDetails("john", gomock.Any()),
-			mock.EXPECT().Save().Return(fmt.Errorf("failed to mock save")),
+			mock.EXPECT().UpdateUserDetails("john", gomock.Any()).Return(FileUserDatabaseUserDetails{}, fmt.Errorf("failed to mock save")),
 		)
 
 		err := provider.ChangePassword("john", "password", "newpassword")
@@ -888,6 +887,85 @@ func TestFileUserProviderCreateUserShouldPreserveConcurrentDuplicateError(t *tes
 	})
 }
 
+func TestFileUserProviderAdminOperations(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+		assert.Equal(t, UserProviderAdminCapabilities{Create: true, List: true, Read: true, Update: true, ResetPassword: true}, provider.AdminCapabilities())
+
+		result, err := provider.AdminListUsers(UserProviderAdminListFilter{Search: "john"})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, result.Total)
+		assert.Equal(t, "john", result.Users[0].Username)
+
+		disabled, err := provider.AdminGetUser("dis")
+		assert.NoError(t, err)
+		assert.True(t, disabled.Disabled)
+
+		groups := []string{"admins", "auditors"}
+		disabledFalse := false
+		displayName := "John Admin"
+		email := "john.admin@example.com"
+
+		updated, err := provider.AdminUpdateUser("john", UserProviderAdminUserUpdate{DisplayName: &displayName, Email: &email, Groups: &groups, Disabled: &disabledFalse})
+		assert.NoError(t, err)
+		assert.Equal(t, UserProviderAdminUserDetails{Username: "john", DisplayName: "John Admin", Email: "john.admin@example.com", Groups: []string{"admins", "auditors"}}, updated)
+
+		assert.NoError(t, provider.AdminResetUserPassword("john", "newpassword"))
+
+		ok, err := provider.CheckUserPassword("john", "newpassword")
+		assert.NoError(t, err)
+		assert.True(t, ok)
+	})
+}
+
+func TestFileUserProviderAdminUpdateShouldRejectAliasCollisionWithoutMutation(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+		config.Search.Email = true
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		email := "john.doe@authelia.com"
+		_, err := provider.AdminUpdateUser("harry", UserProviderAdminUserUpdate{Email: &email})
+		assert.Error(t, err)
+
+		details, err := provider.AdminGetUser("harry")
+		assert.NoError(t, err)
+		assert.NotEqual(t, email, details.Email)
+	})
+}
+
+func TestFileUserProviderAdminUpdateShouldUseMatchedUsernameKey(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+		config.Search.Email = true
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		disabled := true
+		updated, err := provider.AdminUpdateUser("john.doe@authelia.com", UserProviderAdminUserUpdate{Disabled: &disabled})
+		assert.NoError(t, err)
+		assert.Equal(t, "john", updated.Username)
+		assert.True(t, updated.Disabled)
+
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "  john:\n")
+		assert.NotContains(t, string(content), "  \"\":\n")
+	})
+}
+
 func TestNewFileCryptoHashFromConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -1012,9 +1090,7 @@ func TestDatabaseError(t *testing.T) {
 		provider.database = mock
 
 		gomock.InOrder(
-			mock.EXPECT().GetUserDetails("john").Return(db.GetUserDetails("john")),
-			mock.EXPECT().SetUserDetails("john", gomock.Any()),
-			mock.EXPECT().Save().Return(fmt.Errorf("failed to mock save")),
+			mock.EXPECT().UpdateUserDetails("john", gomock.Any()).Return(FileUserDatabaseUserDetails{}, fmt.Errorf("failed to mock save")),
 		)
 
 		assert.EqualError(t, provider.UpdatePassword("john", "apple123"), "failed to mock save")
