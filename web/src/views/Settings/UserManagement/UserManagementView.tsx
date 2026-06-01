@@ -553,35 +553,30 @@ const UserManagementView = () => {
                 <Paper
                     variant="outlined"
                     sx={{
-                        borderColor: alpha(theme.palette.primary.main, 0.14),
+                        borderColor: alpha(theme.palette.divider, 0.86),
                         borderRadius: 3,
-                        boxShadow: `0 18px 48px ${alpha(theme.palette.common.black, 0.06)}`,
+                        boxShadow: `0 20px 56px ${alpha(theme.palette.common.black, 0.035)}`,
                         overflow: "hidden",
                         width: "100%",
                     }}
                 >
                     <Box
                         sx={{
-                            background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.08)}, ${alpha(
-                                theme.palette.background.paper,
-                                0,
-                            )})`,
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
-                            p: { md: 4, xs: 2.5 },
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
+                            p: { md: 4, xs: 2.75 },
                         }}
                     >
-                        <Stack spacing={1.25}>
-                            <Typography color="primary" fontWeight={700} variant="overline">
-                                {translate("Administration")}
+                        <Stack spacing={1}>
+                            <Typography fontWeight={600} variant="h4">
+                                {translate("User Management")}
                             </Typography>
-                            <Typography variant="h4">{translate("User Management")}</Typography>
                             <Typography color="text.secondary" sx={{ maxWidth: 720 }}>
                                 {translate("Manage users in the configured authentication backend")}
                             </Typography>
                         </Stack>
                     </Box>
 
-                    <Stack spacing={3} sx={{ p: { md: 4, xs: 2.5 } }}>
+                    <Stack spacing={2.5} sx={{ p: { md: 4, xs: 2.5 } }}>
                         {capabilitiesLoading ? (
                             <CenteredState
                                 action={
@@ -635,49 +630,60 @@ const UserManagementView = () => {
                                     />
                                 ) : (
                                     <Fragment>
-                                        <Stack
-                                            direction={{ md: "row", xs: "column" }}
-                                            spacing={1.5}
+                                        <Paper
+                                            variant="outlined"
                                             sx={{
-                                                alignItems: { md: "center", xs: "stretch" },
-                                                justifyContent: "space-between",
+                                                backgroundColor: alpha(theme.palette.background.default, 0.38),
+                                                borderColor: alpha(theme.palette.divider, 0.72),
+                                                borderRadius: 2.5,
+                                                p: { md: 2, xs: 1.5 },
                                             }}
                                         >
-                                            <TextField
-                                                fullWidth
-                                                id="user-management-search"
-                                                label={translate("Search Users")}
-                                                value={searchQuery}
-                                                onChange={(event) => setSearchQuery(event.target.value)}
-                                                slotProps={{
-                                                    input: {
-                                                        startAdornment: (
-                                                            <InputAdornment position="start">
-                                                                <Search fontSize="small" />
-                                                            </InputAdornment>
-                                                        ),
-                                                    },
+                                            <Stack
+                                                direction={{ md: "row", xs: "column" }}
+                                                spacing={1.5}
+                                                sx={{
+                                                    alignItems: { md: "center", xs: "stretch" },
+                                                    justifyContent: "space-between",
                                                 }}
-                                            />
-                                            <Stack direction="row" spacing={1}>
-                                                <Button
-                                                    onClick={handleRefresh}
-                                                    startIcon={<Refresh />}
-                                                    variant="outlined"
-                                                >
-                                                    {translate("Refresh")}
-                                                </Button>
-                                                {canCreate ? (
+                                            >
+                                                <TextField
+                                                    fullWidth
+                                                    id="user-management-search"
+                                                    label={translate("Search Users")}
+                                                    size="small"
+                                                    value={searchQuery}
+                                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                                    slotProps={{
+                                                        input: {
+                                                            startAdornment: (
+                                                                <InputAdornment position="start">
+                                                                    <Search fontSize="small" />
+                                                                </InputAdornment>
+                                                            ),
+                                                        },
+                                                    }}
+                                                />
+                                                <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
                                                     <Button
-                                                        onClick={handleOpenCreate}
-                                                        startIcon={<Add />}
-                                                        variant="contained"
+                                                        onClick={handleRefresh}
+                                                        startIcon={<Refresh />}
+                                                        variant="outlined"
                                                     >
-                                                        {translate("Create User")}
+                                                        {translate("Refresh")}
                                                     </Button>
-                                                ) : null}
+                                                    {canCreate ? (
+                                                        <Button
+                                                            onClick={handleOpenCreate}
+                                                            startIcon={<Add />}
+                                                            variant="contained"
+                                                        >
+                                                            {translate("Create User")}
+                                                        </Button>
+                                                    ) : null}
+                                                </Stack>
                                             </Stack>
-                                        </Stack>
+                                        </Paper>
 
                                         {usersError ? (
                                             <CenteredState
@@ -817,12 +823,22 @@ const UserDialog = ({
     const notificationEnabled = canNotify && values.email.trim() !== "";
 
     return (
-        <Dialog fullWidth maxWidth="sm" onClose={onClose} open={open}>
+        <Dialog
+            fullWidth
+            maxWidth="sm"
+            onClose={onClose}
+            open={open}
+            sx={{
+                "& .MuiDialog-paper": {
+                    borderRadius: 3,
+                },
+            }}
+        >
             <Box component="form" onSubmit={onSubmit}>
-                <DialogTitle>{title}</DialogTitle>
+                <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
                 <DialogContent>
-                    <Stack spacing={2.5} sx={{ pt: 1 }}>
-                        <DialogContentText>{subtitle}</DialogContentText>
+                    <Stack spacing={2.25} sx={{ pt: 0.5 }}>
+                        <DialogContentText sx={{ mb: 0.5 }}>{subtitle}</DialogContentText>
                         <TextField
                             disabled={loading || readOnlyUsername}
                             fullWidth
@@ -892,9 +908,15 @@ const UserDialog = ({
                             }
                         />
                         {groupValues.length > 0 ? (
-                            <Stack direction="row" flexWrap="wrap" gap={1}>
+                            <Stack direction="row" flexWrap="wrap" gap={0.75}>
                                 {groupValues.map((group) => (
-                                    <Chip key={group} label={group} size="small" variant="outlined" />
+                                    <Chip
+                                        key={group}
+                                        label={group}
+                                        size="small"
+                                        sx={{ borderRadius: 1.5 }}
+                                        variant="outlined"
+                                    />
                                 ))}
                             </Stack>
                         ) : null}
@@ -939,7 +961,7 @@ const UserDialog = ({
                         ) : null}
                     </Stack>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ px: 3, py: 2.25 }}>
                     <Button disabled={loading} onClick={onClose}>
                         {translate("Cancel")}
                     </Button>
@@ -964,12 +986,24 @@ const PasswordResetDialog = ({
     const { t: translate } = useTranslation("settings");
 
     return (
-        <Dialog fullWidth maxWidth="sm" onClose={onClose} open={open}>
+        <Dialog
+            fullWidth
+            maxWidth="sm"
+            onClose={onClose}
+            open={open}
+            sx={{
+                "& .MuiDialog-paper": {
+                    borderRadius: 3,
+                },
+            }}
+        >
             <Box component="form" onSubmit={onSubmit}>
-                <DialogTitle>{title}</DialogTitle>
+                <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
                 <DialogContent>
-                    <Stack spacing={2.5} sx={{ pt: 1 }}>
-                        <DialogContentText>{translate("Set a new password for this user")}</DialogContentText>
+                    <Stack spacing={2.25} sx={{ pt: 0.5 }}>
+                        <DialogContentText sx={{ mb: 0.5 }}>
+                            {translate("Set a new password for this user")}
+                        </DialogContentText>
                         <TextField
                             disabled={loading}
                             fullWidth
@@ -986,7 +1020,7 @@ const PasswordResetDialog = ({
                         />
                     </Stack>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ px: 3, py: 2.25 }}>
                     <Button disabled={loading} onClick={onClose}>
                         {translate("Cancel")}
                     </Button>
@@ -1003,12 +1037,22 @@ const ConfirmDialog = ({ actionLabel, description, loading, onClose, onConfirm, 
     const { t: translate } = useTranslation("settings");
 
     return (
-        <Dialog fullWidth maxWidth="xs" onClose={onClose} open={open}>
-            <DialogTitle>{title}</DialogTitle>
+        <Dialog
+            fullWidth
+            maxWidth="xs"
+            onClose={onClose}
+            open={open}
+            sx={{
+                "& .MuiDialog-paper": {
+                    borderRadius: 3,
+                },
+            }}
+        >
+            <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
             <DialogContent>
                 <DialogContentText>{description}</DialogContentText>
             </DialogContent>
-            <DialogActions>
+            <DialogActions sx={{ px: 3, py: 2.25 }}>
                 <Button disabled={loading} onClick={onClose}>
                     {translate("Cancel")}
                 </Button>
@@ -1038,48 +1082,80 @@ const UserTable = ({
     onToggle,
     translate,
     users,
-}: UserCollectionProps) => (
-    <TableContainer component={Paper} variant="outlined">
-        <Table>
-            <TableHead>
-                <TableRow>
-                    <TableCell>{translate("Username")}</TableCell>
-                    <TableCell>{translate("Display Name")}</TableCell>
-                    <TableCell>{translate("Email")}</TableCell>
-                    <TableCell>{translate("Groups")}</TableCell>
-                    <TableCell>{translate("Status")}</TableCell>
-                    <TableCell align="right">{translate("Actions")}</TableCell>
-                </TableRow>
-            </TableHead>
-            <TableBody>
-                {users.map((user) => (
-                    <TableRow key={user.username} hover>
-                        <TableCell>{user.username}</TableCell>
-                        <TableCell>{user.display_name}</TableCell>
-                        <TableCell>{user.email || translate("Not Set")}</TableCell>
-                        <TableCell>
-                            <GroupsList groups={user.groups} translate={translate} />
-                        </TableCell>
-                        <TableCell>
-                            <StatusChip disabled={user.disabled} translate={translate} />
-                        </TableCell>
-                        <TableCell align="right">
-                            <RowActions
-                                canResetPassword={canResetPassword}
-                                canUpdate={canUpdate}
-                                onEdit={() => onEdit(user.username)}
-                                onResetPassword={() => onResetPassword(user.username)}
-                                onToggle={() => onToggle(user)}
-                                translate={translate}
-                                user={user}
-                            />
-                        </TableCell>
+}: UserCollectionProps) => {
+    const theme = useTheme();
+
+    return (
+        <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{
+                borderColor: alpha(theme.palette.divider, 0.72),
+                borderRadius: 2.5,
+                overflow: "hidden",
+            }}
+        >
+            <Table
+                sx={{
+                    "& .MuiTableCell-body": {
+                        borderBottomColor: alpha(theme.palette.divider, 0.5),
+                        py: 1.5,
+                    },
+                    "& .MuiTableCell-head": {
+                        backgroundColor: alpha(theme.palette.background.default, 0.44),
+                        borderBottomColor: alpha(theme.palette.divider, 0.72),
+                        color: "text.secondary",
+                        fontSize: theme.typography.caption.fontSize,
+                        fontWeight: 700,
+                        letterSpacing: 0.4,
+                        py: 1.25,
+                        textTransform: "uppercase",
+                    },
+                    "& .MuiTableRow-root:last-of-type .MuiTableCell-body": {
+                        borderBottom: 0,
+                    },
+                }}
+            >
+                <TableHead>
+                    <TableRow>
+                        <TableCell>{translate("Username")}</TableCell>
+                        <TableCell>{translate("Display Name")}</TableCell>
+                        <TableCell>{translate("Email")}</TableCell>
+                        <TableCell>{translate("Groups")}</TableCell>
+                        <TableCell>{translate("Status")}</TableCell>
+                        <TableCell align="right">{translate("Actions")}</TableCell>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
-    </TableContainer>
-);
+                </TableHead>
+                <TableBody>
+                    {users.map((user) => (
+                        <TableRow key={user.username} hover>
+                            <TableCell>{user.username}</TableCell>
+                            <TableCell>{user.display_name}</TableCell>
+                            <TableCell>{user.email || translate("Not Set")}</TableCell>
+                            <TableCell>
+                                <GroupsList groups={user.groups} translate={translate} />
+                            </TableCell>
+                            <TableCell>
+                                <StatusChip disabled={user.disabled} translate={translate} />
+                            </TableCell>
+                            <TableCell align="right">
+                                <RowActions
+                                    canResetPassword={canResetPassword}
+                                    canUpdate={canUpdate}
+                                    onEdit={() => onEdit(user.username)}
+                                    onResetPassword={() => onResetPassword(user.username)}
+                                    onToggle={() => onToggle(user)}
+                                    translate={translate}
+                                    user={user}
+                                />
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+};
 
 const UserCards = ({
     canResetPassword,
@@ -1090,11 +1166,19 @@ const UserCards = ({
     translate,
     users,
 }: UserCollectionProps) => (
-    <Stack spacing={1.5}>
+    <Stack spacing={1.25}>
         {users.map((user) => (
-            <Card key={user.username} variant="outlined">
-                <CardContent>
-                    <Stack spacing={1.25}>
+            <Card
+                key={user.username}
+                variant="outlined"
+                sx={(theme) => ({
+                    borderColor: alpha(theme.palette.divider, 0.72),
+                    borderRadius: 2.5,
+                    boxShadow: `0 10px 28px ${alpha(theme.palette.common.black, 0.025)}`,
+                })}
+            >
+                <CardContent sx={{ pb: 1.25 }}>
+                    <Stack spacing={1.5}>
                         <Stack direction="row" justifyContent="space-between" spacing={1}>
                             <Box>
                                 <Typography fontWeight={600}>{user.display_name}</Typography>
@@ -1104,11 +1188,13 @@ const UserCards = ({
                             </Box>
                             <StatusChip disabled={user.disabled} translate={translate} />
                         </Stack>
-                        <Typography variant="body2">{user.email || translate("Not Set")}</Typography>
+                        <Typography color={user.email ? "text.primary" : "text.secondary"} variant="body2">
+                            {user.email || translate("Not Set")}
+                        </Typography>
                         <GroupsList groups={user.groups} translate={translate} />
                     </Stack>
                 </CardContent>
-                <CardActions sx={{ justifyContent: "flex-end", pb: 2, px: 2 }}>
+                <CardActions sx={{ justifyContent: "flex-end", pb: 2, pt: 0, px: 2 }}>
                     <RowActions
                         canResetPassword={canResetPassword}
                         canUpdate={canUpdate}
@@ -1128,7 +1214,7 @@ const GroupsList = ({ groups, translate }: { groups: string[]; translate: (key: 
     groups.length > 0 ? (
         <Stack direction="row" flexWrap="wrap" gap={0.75}>
             {groups.map((group) => (
-                <Chip key={group} label={group} size="small" variant="outlined" />
+                <Chip key={group} label={group} size="small" sx={{ borderRadius: 1.5 }} variant="outlined" />
             ))}
         </Stack>
     ) : (
@@ -1139,10 +1225,18 @@ const GroupsList = ({ groups, translate }: { groups: string[]; translate: (key: 
 
 const StatusChip = ({ disabled, translate }: { disabled: boolean; translate: (key: string) => string }) => (
     <Chip
-        color={disabled ? "default" : "success"}
         label={disabled ? translate("Disabled") : translate("Enabled")}
         size="small"
-        variant={disabled ? "outlined" : "filled"}
+        sx={(theme) => ({
+            backgroundColor: disabled
+                ? alpha(theme.palette.text.secondary, 0.06)
+                : alpha(theme.palette.success.main, 0.1),
+            borderColor: disabled ? alpha(theme.palette.text.secondary, 0.22) : alpha(theme.palette.success.main, 0.28),
+            borderRadius: 1.5,
+            color: disabled ? "text.secondary" : "success.dark",
+            fontWeight: 600,
+        })}
+        variant="outlined"
     />
 );
 
@@ -1163,10 +1257,15 @@ const RowActions = ({
     translate: (key: string) => string;
     user: AdminUser;
 }) => (
-    <Stack direction="row" justifyContent="flex-end" spacing={0.5}>
+    <Stack direction="row" justifyContent="flex-end" spacing={0.25}>
         {canUpdate ? (
             <Tooltip title={translate("Edit User")}>
-                <IconButton aria-label={`${translate("Edit User")} ${user.username}`} onClick={onEdit} size="small">
+                <IconButton
+                    aria-label={`${translate("Edit User")} ${user.username}`}
+                    onClick={onEdit}
+                    size="small"
+                    sx={{ color: "text.secondary" }}
+                >
                     <Edit fontSize="small" />
                 </IconButton>
             </Tooltip>
@@ -1177,6 +1276,7 @@ const RowActions = ({
                     aria-label={`${translate("Reset Password")} ${user.username}`}
                     onClick={onResetPassword}
                     size="small"
+                    sx={{ color: "text.secondary" }}
                 >
                     <LockReset fontSize="small" />
                 </IconButton>
@@ -1188,6 +1288,7 @@ const RowActions = ({
                     aria-label={`${user.disabled ? translate("Enable User") : translate("Disable User")} ${user.username}`}
                     onClick={onToggle}
                     size="small"
+                    sx={{ color: "text.secondary" }}
                 >
                     {user.disabled ? <Person fontSize="small" /> : <PersonOff fontSize="small" />}
                 </IconButton>
@@ -1199,18 +1300,23 @@ const RowActions = ({
 const CenteredState = ({ action, description, title }: { action?: ReactNode; description: string; title: string }) => (
     <Paper
         variant="outlined"
-        sx={{
+        sx={(theme) => ({
             alignItems: "center",
+            backgroundColor: alpha(theme.palette.background.default, 0.28),
+            borderColor: alpha(theme.palette.divider, 0.72),
+            borderRadius: 2.5,
             display: "flex",
             justifyContent: "center",
-            minHeight: 240,
+            minHeight: 220,
             px: 3,
             py: 4,
             textAlign: "center",
-        }}
+        })}
     >
         <Stack spacing={1.5} sx={{ alignItems: "center", maxWidth: 420 }}>
-            <Typography variant="h6">{title}</Typography>
+            <Typography fontWeight={600} variant="h6">
+                {title}
+            </Typography>
             <Typography color="text.secondary">{description}</Typography>
             {action}
         </Stack>
