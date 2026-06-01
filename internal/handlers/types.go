@@ -236,6 +236,24 @@ type adminCreateUserRequestBody struct {
 	Email       string   `json:"email"`
 	Groups      []string `json:"groups"`
 	Disabled    bool     `json:"disabled"`
+	Notify      *bool    `json:"notify"`
+}
+
+type adminCreateUserResponseBody struct {
+	NotificationSent   bool   `json:"notification_sent"`
+	NotificationReason string `json:"notification_reason,omitempty"`
+	NotificationError  string `json:"notification_error,omitempty"`
+}
+
+type adminUpdateUserRequestBody struct {
+	DisplayName *string   `json:"display_name"`
+	Email       *string   `json:"email"`
+	Groups      *[]string `json:"groups"`
+	Disabled    *bool     `json:"disabled"`
+}
+
+type adminResetPasswordRequestBody struct {
+	Password string `json:"password" valid:"required"`
 }
 
 // PasswordPolicyBody represents the response sent by the password reset step 2.
