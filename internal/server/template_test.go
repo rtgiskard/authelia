@@ -16,14 +16,18 @@ import (
 )
 
 const (
-	assetsOpenAPIPath = "public_html/api/openapi.yml"
-	localOpenAPIPath  = "../../api/openapi.yml"
+	assetsOpenAPIIndexPath = "public_html/api/index.html"
+	localOpenAPIIndexPath  = "../../api/index.html"
+	assetsOpenAPIPath      = "public_html/api/openapi.yml"
+	localOpenAPIPath       = "../../api/openapi.yml"
 )
 
 type ReadFileOpenAPI struct{}
 
 func (lfs *ReadFileOpenAPI) Open(name string) (fs.File, error) {
 	switch name {
+	case assetsOpenAPIIndexPath:
+		return os.Open(localOpenAPIIndexPath)
 	case assetsOpenAPIPath:
 		return os.Open(localOpenAPIPath)
 	default:
@@ -33,6 +37,8 @@ func (lfs *ReadFileOpenAPI) Open(name string) (fs.File, error) {
 
 func (lfs *ReadFileOpenAPI) ReadFile(name string) ([]byte, error) {
 	switch name {
+	case assetsOpenAPIIndexPath:
+		return os.ReadFile(localOpenAPIIndexPath)
 	case assetsOpenAPIPath:
 		return os.ReadFile(localOpenAPIPath)
 	default:
