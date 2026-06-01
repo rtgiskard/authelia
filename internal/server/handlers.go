@@ -230,7 +230,12 @@ func handlerMain(ctx context.Context, config *schema.Configuration, providers mi
 	r.GET("/api/configuration/password-policy", middlewareAPI(handlers.PasswordPolicyConfigurationGET))
 
 	if config.Administration.Enable {
+		r.GET("/admin/api/v1/users/capabilities", middlewareAdministration(handlers.AdminUserCapabilitiesGET))
+		r.GET("/admin/api/v1/users", middlewareAdministration(handlers.AdminUsersGET))
 		r.POST("/admin/api/v1/users", middlewareAdministration(handlers.AdminUsersPOST))
+		r.GET("/admin/api/v1/users/{username}", middlewareAdministration(handlers.AdminUserGET))
+		r.PATCH("/admin/api/v1/users/{username}", middlewareAdministration(handlers.AdminUserPATCH))
+		r.PUT("/admin/api/v1/users/{username}/password", middlewareAdministration(handlers.AdminUserPasswordPUT))
 	}
 
 	metricsVRMW := middlewares.NewMetricsAuthzRequest(providers.Metrics)
