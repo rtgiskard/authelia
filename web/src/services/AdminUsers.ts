@@ -83,7 +83,12 @@ export function getAdminUserManagementCapabilities(signal?: AbortSignal) {
             can_notify: capabilities.create,
             can_reset_password: capabilities.reset_password,
             can_update: capabilities.update,
-            supported: capabilities.create || capabilities.list || capabilities.read || capabilities.update,
+            supported:
+                capabilities.create ||
+                capabilities.list ||
+                capabilities.read ||
+                capabilities.update ||
+                capabilities.reset_password,
         }),
     );
 }
@@ -125,7 +130,7 @@ function toAdminCreateUserResponse(
 
     if (response.notification_error) {
         return {
-            notification: { message: response.notification_error, status: "failed" },
+            notification: { message: "User saved but email notification could not be sent", status: "failed" },
         };
     }
 

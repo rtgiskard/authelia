@@ -53,6 +53,50 @@ it("gets user management capabilities", async () => {
     expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}/capabilities`, undefined);
 });
 
+it("treats reset-password-only capabilities as supported", async () => {
+    vi.mocked(Get).mockResolvedValue({
+        create: false,
+        delete: false,
+        list: false,
+        read: false,
+        reset_password: true,
+        update: false,
+    });
+
+    await expect(getAdminUserManagementCapabilities()).resolves.toEqual({
+        can_create: false,
+        can_list: false,
+        can_notify: false,
+        can_reset_password: true,
+        can_update: false,
+        supported: true,
+    });
+});
+
+it("does not expose raw notification errors from create responses", async () => {
+    const payload = {
+        disabled: false,
+        display_name: "Example User",
+        email: "user@example.com",
+        groups: [],
+        notify: true,
+        password: "password",
+        username: "example",
+    };
+
+    vi.mocked(PostWithOptionalResponse).mockResolvedValue({
+        notification_error: "smtp password leaked: secret-token",
+        notification_sent: false,
+    });
+
+    await expect(createAdminUser(payload)).resolves.toEqual({
+        notification: {
+            message: "User saved but email notification could not be sent",
+            status: "failed",
+        },
+    });
+});
+
 it("lists users without a query", async () => {
     vi.mocked(Get).mockResolvedValue({ total: 0, users: [] });
 
