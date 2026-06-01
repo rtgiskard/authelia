@@ -13,7 +13,10 @@ import (
 	"github.com/authelia/authelia/v4/internal/middlewares"
 )
 
-const adminUserPathParamUsername = "username"
+const (
+	adminUserPathParamUsername          = "username"
+	adminUserNotificationDeliveryFailed = "email notification could not be sent"
+)
 
 // AdminUsersPOST is the administrator user creation endpoint.
 func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
@@ -177,7 +180,8 @@ func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.
 	address := mail.Address{Name: details.DisplayName, Address: details.Email}
 
 	if err := ctx.Providers.Notifier.Send(ctx, address, "User created successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
-		response.NotificationError = err.Error()
+		ctx.Logger.WithError(err).Error("Error occurred sending user creation notification email")
+		response.NotificationError = adminUserNotificationDeliveryFailed
 		return response
 	}
 

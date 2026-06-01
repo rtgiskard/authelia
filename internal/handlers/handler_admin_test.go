@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/mail"
 	"regexp"
 	"testing"
@@ -72,6 +73,47 @@ func TestAdminUsersPOST_ShouldSucceedWithoutEmailNotificationWhenBlank(t *testin
 	assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
 	assert.Contains(t, string(mock.Ctx.Response.Body()), `"notification_sent":false`)
 	assert.Contains(t, string(mock.Ctx.Response.Body()), `user has no email address configured`)
+}
+
+func TestAdminUsersPOST_ShouldNotExposeNotifierError(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{})
+
+	body := adminCreateUserRequestBody{
+		Username:    "john",
+		Password:    testPasswordNew,
+		DisplayName: "John Doe",
+		Email:       "john@example.com",
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	assert.NoError(t, err)
+	mock.Ctx.Request.SetBody(bodyBytes)
+
+	mock.UserProviderMock.EXPECT().
+		CreateUser(authentication.UserDetailsCreate{
+			Username:    "john",
+			Password:    testPasswordNew,
+			DisplayName: "John Doe",
+			Email:       "john@example.com",
+			Groups:      []string{},
+		}).
+		Return(nil)
+	mock.NotifierMock.EXPECT().
+		Send(mock.Ctx, mail.Address{Name: "John Doe", Address: "john@example.com"}, "User created successfully", gomock.Any(), gomock.Any()).
+		Return(fmt.Errorf("smtp password leaked: secret-token"))
+
+	AdminUsersPOST(mock.Ctx)
+
+	bodyString := string(mock.Ctx.Response.Body())
+	assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
+	assert.Contains(t, bodyString, `"notification_sent":false`)
+	assert.Contains(t, bodyString, adminUserNotificationDeliveryFailed)
+	assert.NotContains(t, bodyString, "secret-token")
+	assert.NotContains(t, bodyString, "smtp password leaked")
 }
 
 func TestAdminUsersPOST_ShouldFailWhenPasswordPolicyNotMet(t *testing.T) {
