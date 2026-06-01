@@ -68,6 +68,19 @@ func (mr *MockFileUserDatabaseMockRecorder) GetUserDetails(username any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserDetails", reflect.TypeOf((*MockFileUserDatabase)(nil).GetUserDetails), username)
 }
 
+func (m *MockFileUserDatabase) ListUserDetails() ([]FileUserDatabaseUserDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListUserDetails")
+	ret0, _ := ret[0].([]FileUserDatabaseUserDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (mr *MockFileUserDatabaseMockRecorder) ListUserDetails() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUserDetails", reflect.TypeOf((*MockFileUserDatabase)(nil).ListUserDetails))
+}
+
 // Load mocks base method.
 func (m *MockFileUserDatabase) Load() error {
 	m.ctrl.T.Helper()
@@ -106,4 +119,17 @@ func (m *MockFileUserDatabase) SetUserDetails(username string, details *FileUser
 func (mr *MockFileUserDatabaseMockRecorder) SetUserDetails(username, details any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserDetails", reflect.TypeOf((*MockFileUserDatabase)(nil).SetUserDetails), username, details)
+}
+
+func (m *MockFileUserDatabase) UpdateUserDetails(username string, update func(details *FileUserDatabaseUserDetails) (err error)) (FileUserDatabaseUserDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUserDetails", username, update)
+	ret0, _ := ret[0].(FileUserDatabaseUserDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (mr *MockFileUserDatabaseMockRecorder) UpdateUserDetails(username, update any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserDetails", reflect.TypeOf((*MockFileUserDatabase)(nil).UpdateUserDetails), username, update)
 }

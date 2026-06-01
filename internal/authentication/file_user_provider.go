@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -123,6 +124,97 @@ func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
 	return nil
 }
 
+func (p *FileUserProvider) AdminCapabilities() (capabilities UserProviderAdminCapabilities) {
+	return UserProviderAdminCapabilities{Create: true, List: true, Read: true, Update: true, ResetPassword: true, Delete: false}
+}
+
+func (p *FileUserProvider) AdminListUsers(filter UserProviderAdminListFilter) (result UserProviderAdminListResult, err error) {
+	var users []FileUserDatabaseUserDetails
+
+	if users, err = p.database.ListUserDetails(); err != nil {
+		return result, err
+	}
+
+	search := strings.ToLower(strings.TrimSpace(filter.Search))
+
+	for _, user := range users {
+		details := user.ToAdminUserDetails()
+		if search != "" && !details.Matches(search) {
+			continue
+		}
+
+		result.Users = append(result.Users, details)
+	}
+
+	sort.Slice(result.Users, func(i, j int) bool { return result.Users[i].Username < result.Users[j].Username })
+	result.Total = len(result.Users)
+
+	return result, nil
+}
+
+func (p *FileUserProvider) AdminGetUser(username string) (details UserProviderAdminUserDetails, err error) {
+	var user FileUserDatabaseUserDetails
+
+	if user, err = p.database.GetUserDetails(username); err != nil {
+		return details, err
+	}
+
+	return user.ToAdminUserDetails(), nil
+}
+
+func (p *FileUserProvider) AdminUpdateUser(username string, update UserProviderAdminUserUpdate) (details UserProviderAdminUserDetails, err error) {
+	var user FileUserDatabaseUserDetails
+
+	if user, err = p.database.UpdateUserDetails(username, func(current *FileUserDatabaseUserDetails) (err error) {
+		if update.DisplayName != nil {
+			current.DisplayName = *update.DisplayName
+		}
+
+		if update.Email != nil {
+			current.Email = *update.Email
+		}
+
+		if update.Groups != nil {
+			current.Groups = *update.Groups
+		}
+
+		if update.Disabled != nil {
+			current.Disabled = *update.Disabled
+		}
+
+		return nil
+	}); err != nil {
+		return details, err
+	}
+
+	p.mutex.Lock()
+	p.setTimeoutReload(time.Now())
+	p.mutex.Unlock()
+
+	return user.ToAdminUserDetails(), nil
+}
+
+func (p *FileUserProvider) AdminResetUserPassword(username string, password string) (err error) {
+	var digest algorithm.Digest
+
+	if digest, err = p.hash.Hash(password); err != nil {
+		return err
+	}
+
+	if _, err = p.database.UpdateUserDetails(username, func(current *FileUserDatabaseUserDetails) (err error) {
+		current.Password = schema.NewPasswordDigest(digest)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	p.mutex.Lock()
+	p.setTimeoutReload(time.Now())
+	p.mutex.Unlock()
+
+	return nil
+}
+
 // CheckUserPassword checks if provided password matches for the given user.
 func (p *FileUserProvider) CheckUserPassword(username string, password string) (match bool, err error) {
 	var details FileUserDatabaseUserDetails
@@ -169,35 +261,29 @@ func (p *FileUserProvider) GetDetailsExtended(username string) (details *UserDet
 
 // UpdatePassword update the password of the given user.
 func (p *FileUserProvider) UpdatePassword(username string, newPassword string) (err error) {
-	var details FileUserDatabaseUserDetails
-
-	if details, err = p.database.GetUserDetails(username); err != nil {
-		return err
-	}
-
-	if details.Disabled {
-		return ErrUserNotFound
-	}
-
 	var digest algorithm.Digest
 
 	if digest, err = p.hash.Hash(newPassword); err != nil {
 		return err
 	}
 
-	details.Password = schema.NewPasswordDigest(digest)
+	if _, err = p.database.UpdateUserDetails(username, func(details *FileUserDatabaseUserDetails) (err error) {
+		if details.Disabled {
+			return ErrUserNotFound
+		}
 
-	p.database.SetUserDetails(details.Username, &details)
+		details.Password = schema.NewPasswordDigest(digest)
+
+		return nil
+	}); err != nil {
+		return err
+	}
 
 	p.mutex.Lock()
 
 	p.setTimeoutReload(time.Now())
 
 	p.mutex.Unlock()
-
-	if err = p.database.Save(); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -236,19 +322,19 @@ func (p *FileUserProvider) ChangePassword(username string, oldPassword string, n
 		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
 	}
 
-	details.Password = schema.NewPasswordDigest(digest)
+	if _, err = p.database.UpdateUserDetails(details.Username, func(current *FileUserDatabaseUserDetails) (err error) {
+		current.Password = schema.NewPasswordDigest(digest)
 
-	p.database.SetUserDetails(details.Username, &details)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
+	}
 
 	p.mutex.Lock()
 
 	p.setTimeoutReload(time.Now())
 
 	p.mutex.Unlock()
-
-	if err = p.database.Save(); err != nil {
-		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
-	}
 
 	return nil
 }
@@ -278,6 +364,22 @@ func (p *FileUserProvider) StartupCheck() (err error) {
 
 func (p *FileUserProvider) setTimeoutReload(now time.Time) {
 	p.timeoutReload = now.Add(time.Second / 2)
+}
+
+func (m FileUserDatabaseUserDetails) ToAdminUserDetails() (details UserProviderAdminUserDetails) {
+	return UserProviderAdminUserDetails{
+		Username:    m.Username,
+		DisplayName: m.DisplayName,
+		Email:       m.Email,
+		Groups:      m.Groups,
+		Disabled:    m.Disabled,
+	}
+}
+
+func (m UserProviderAdminUserDetails) Matches(search string) bool {
+	return strings.Contains(strings.ToLower(m.Username), search) ||
+		strings.Contains(strings.ToLower(m.DisplayName), search) ||
+		strings.Contains(strings.ToLower(m.Email), search)
 }
 
 // NewFileCryptoHashFromConfig returns a crypt.Hash given a valid configuration.
