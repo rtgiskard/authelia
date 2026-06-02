@@ -84,7 +84,7 @@ func (p *FileUserProvider) Close() (err error) {
 
 // CreateUser creates a new user in the file backend.
 func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
-	if strings.TrimSpace(details.Username) == "" || strings.TrimSpace(details.Password) == "" || strings.TrimSpace(details.DisplayName) == "" {
+	if strings.TrimSpace(details.Username) == "" || strings.TrimSpace(details.Password) == "" || strings.TrimSpace(details.DisplayName) == "" || strings.TrimSpace(details.Email) == "" {
 		return ErrOperationFailed
 	}
 
@@ -163,6 +163,10 @@ func (p *FileUserProvider) AdminGetUser(username string) (details UserProviderAd
 }
 
 func (p *FileUserProvider) AdminUpdateUser(username string, update UserProviderAdminUserUpdate) (details UserProviderAdminUserDetails, err error) {
+	if update.Email == nil || strings.TrimSpace(*update.Email) == "" {
+		return details, ErrOperationFailed
+	}
+
 	var user FileUserDatabaseUserDetails
 
 	if user, err = p.database.UpdateUserDetails(username, func(current *FileUserDatabaseUserDetails) (err error) {

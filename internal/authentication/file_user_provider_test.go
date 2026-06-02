@@ -809,7 +809,55 @@ func TestFileUserProviderCreateUserShouldRejectDuplicate(t *testing.T) {
 		provider := NewFileUserProvider(&config)
 
 		assert.NoError(t, provider.StartupCheck())
-		assert.ErrorIs(t, provider.CreateUser(UserDetailsCreate{Username: "john", Password: "password123", DisplayName: "John"}), ErrUserAlreadyExists)
+		assert.ErrorIs(t, provider.CreateUser(UserDetailsCreate{Username: "john", Password: "password123", DisplayName: "John", Email: "john@example.com"}), ErrUserAlreadyExists)
+	})
+}
+
+func TestFileUserProviderCreateUserShouldRejectDuplicateEmailWithoutMutation(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		err := provider.CreateUser(UserDetailsCreate{
+			Username:    "alice",
+			Password:    "password123",
+			DisplayName: "Alice Example",
+			Email:       "john.doe@authelia.com",
+		})
+
+		assert.ErrorIs(t, err, ErrUserAlreadyExists)
+
+		details, err := provider.GetDetails("alice")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, details)
+	})
+}
+
+func TestFileUserProviderCreateUserShouldRejectUsernameEmailConflictWithoutMutation(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		err := provider.CreateUser(UserDetailsCreate{
+			Username:    "john.doe@authelia.com",
+			Password:    "password123",
+			DisplayName: "Alice Example",
+			Email:       "alice@example.com",
+		})
+
+		assert.ErrorIs(t, err, ErrUserAlreadyExists)
+
+		details, err := provider.GetDetails("john.doe@authelia.com")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, details)
 	})
 }
 
@@ -830,7 +878,7 @@ func TestFileUserProviderCreateUserShouldRejectAliasCollisionWithoutMutation(t *
 			Email:       "john.doe@authelia.com",
 		})
 
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrUserAlreadyExists)
 
 		details, err := provider.GetDetails("alice")
 		assert.ErrorIs(t, err, ErrUserNotFound)
@@ -853,6 +901,7 @@ func TestFileUserProviderCreateUserShouldNotMutateWhenSaveFails(t *testing.T) {
 			Username:    "alice",
 			Password:    "password123",
 			DisplayName: "Alice Example",
+			Email:       "alice@example.com",
 		})
 
 		assert.Error(t, err)
@@ -883,7 +932,7 @@ func TestFileUserProviderCreateUserShouldPreserveConcurrentDuplicateError(t *tes
 			mock.EXPECT().CreateUserDetails("alice", gomock.Any()).Return(ErrUserAlreadyExists),
 		)
 
-		assert.ErrorIs(t, provider.CreateUser(UserDetailsCreate{Username: "alice", Password: "password123", DisplayName: "Alice Example"}), ErrUserAlreadyExists)
+		assert.ErrorIs(t, provider.CreateUser(UserDetailsCreate{Username: "alice", Password: "password123", DisplayName: "Alice Example", Email: "alice@example.com"}), ErrUserAlreadyExists)
 	})
 }
 
@@ -939,11 +988,49 @@ func TestFileUserProviderAdminUpdateShouldRejectAliasCollisionWithoutMutation(t 
 
 		email := "john.doe@authelia.com"
 		_, err := provider.AdminUpdateUser("harry", UserProviderAdminUserUpdate{Email: &email})
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrUserAlreadyExists)
 
 		details, err := provider.AdminGetUser("harry")
 		assert.NoError(t, err)
 		assert.NotEqual(t, email, details.Email)
+	})
+}
+
+func TestFileUserProviderAdminUpdateShouldRejectDuplicateEmailWithoutMutation(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		email := "john.doe@authelia.com"
+		_, err := provider.AdminUpdateUser("harry", UserProviderAdminUserUpdate{Email: &email})
+		assert.ErrorIs(t, err, ErrUserAlreadyExists)
+
+		details, err := provider.AdminGetUser("harry")
+		assert.NoError(t, err)
+		assert.Equal(t, "harry.potter@authelia.com", details.Email)
+	})
+}
+
+func TestFileUserProviderAdminUpdateShouldRejectEmailUsernameConflictWithoutMutation(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		email := "john"
+		_, err := provider.AdminUpdateUser("harry", UserProviderAdminUserUpdate{Email: &email})
+		assert.ErrorIs(t, err, ErrUserAlreadyExists)
+
+		details, err := provider.AdminGetUser("harry")
+		assert.NoError(t, err)
+		assert.Equal(t, "harry.potter@authelia.com", details.Email)
 	})
 }
 
@@ -958,7 +1045,8 @@ func TestFileUserProviderAdminUpdateShouldUseMatchedUsernameKey(t *testing.T) {
 		assert.NoError(t, provider.StartupCheck())
 
 		disabled := true
-		updated, err := provider.AdminUpdateUser("john.doe@authelia.com", UserProviderAdminUserUpdate{Disabled: &disabled})
+		email := "john.doe@authelia.com"
+		updated, err := provider.AdminUpdateUser("john.doe@authelia.com", UserProviderAdminUserUpdate{Disabled: &disabled, Email: &email})
 		assert.NoError(t, err)
 		assert.Equal(t, "john", updated.Username)
 		assert.True(t, updated.Disabled)

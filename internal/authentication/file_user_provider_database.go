@@ -244,6 +244,10 @@ func (m *FileUserDatabase) CreateUserDetails(username string, details *FileUserD
 
 	users[username] = created
 
+	if err = validateUniqueUserIdentity(users, username); err != nil {
+		return err
+	}
+
 	database := &FileUserDatabase{
 		RWMutex:     &sync.RWMutex{},
 		Users:       users,
@@ -332,6 +336,10 @@ func (m *FileUserDatabase) UpdateUserDetails(username string, update func(detail
 
 	users[key] = updated
 
+	if err = validateUniqueUserIdentity(users, key); err != nil {
+		return user, err
+	}
+
 	database := &FileUserDatabase{
 		RWMutex:     &sync.RWMutex{},
 		Users:       users,
@@ -358,6 +366,37 @@ func (m *FileUserDatabase) UpdateUserDetails(username string, update func(detail
 	updated.Username = key
 
 	return updated, nil
+}
+
+func validateUniqueUserIdentity(users map[string]FileUserDatabaseUserDetails, key string) error {
+	current, ok := users[key]
+	if !ok {
+		return ErrUserNotFound
+	}
+
+	email := strings.TrimSpace(current.Email)
+
+	for username, details := range users {
+		if username == key {
+			continue
+		}
+
+		otherEmail := strings.TrimSpace(details.Email)
+
+		if email != "" && strings.EqualFold(email, otherEmail) {
+			return ErrUserAlreadyExists
+		}
+
+		if email != "" && strings.EqualFold(email, username) {
+			return ErrUserAlreadyExists
+		}
+
+		if otherEmail != "" && strings.EqualFold(key, otherEmail) {
+			return ErrUserAlreadyExists
+		}
+	}
+
+	return nil
 }
 
 // SetUserDetails sets the FileUserDatabaseUserDetails for a given user.
