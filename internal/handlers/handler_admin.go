@@ -20,11 +20,11 @@ const (
 	adminUserNotificationDeliveryFailed = "email notification could not be sent"
 	adminUserEmailRequired              = "Email address is required."
 	adminGeneratedPasswordAttempts      = 20
+	adminGeneratedPasswordLength        = 16
 	adminGeneratedPasswordCharacters    = random.CharSetAlphaNumeric + random.CharSetSymbolicRFC3986Unreserved
 )
 
 var (
-	adminGeneratedPasswordLengths       = []int{32, 30, 24, 20, 16, 12, 8}
 	errAdminGeneratedPasswordPolicyFail = errors.New("generated password did not meet the password policy")
 )
 
@@ -160,6 +160,12 @@ func AdminUserPATCH(ctx *middlewares.AutheliaCtx) {
 	}
 	if update.DisplayName != nil && *update.DisplayName == "" {
 		ctx.SetJSONError(messageDisplayNameRequired)
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		return
+	}
+
+	if update.Email == nil || strings.TrimSpace(*update.Email) == "" {
+		ctx.SetJSONError(adminUserEmailRequired)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
@@ -347,8 +353,10 @@ func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authenticati
 }
 
 func adminGeneratePassword(ctx *middlewares.AutheliaCtx) (password string, err error) {
-	for attempt := range adminGeneratedPasswordAttempts {
-		if password, err = adminGeneratedPassword(ctx, adminGeneratedPasswordLengths[attempt%len(adminGeneratedPasswordLengths)]); err != nil {
+	length := adminGeneratedPasswordLengthForPolicy(ctx)
+
+	for range adminGeneratedPasswordAttempts {
+		if password, err = adminGeneratedPassword(ctx, length); err != nil {
 			return "", err
 		}
 
@@ -358,6 +366,14 @@ func adminGeneratePassword(ctx *middlewares.AutheliaCtx) (password string, err e
 	}
 
 	return "", errAdminGeneratedPasswordPolicyFail
+}
+
+func adminGeneratedPasswordLengthForPolicy(ctx *middlewares.AutheliaCtx) int {
+	if policy := ctx.Configuration.PasswordPolicy.Standard; policy.Enabled && policy.MinLength > adminGeneratedPasswordLength {
+		return policy.MinLength
+	}
+
+	return adminGeneratedPasswordLength
 }
 
 func adminGeneratedPassword(ctx *middlewares.AutheliaCtx, length int) (password string, err error) {

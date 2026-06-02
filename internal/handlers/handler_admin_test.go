@@ -146,6 +146,7 @@ func TestAdminUsersPOST_ShouldCreateGeneratedPasswordAndEmailIt(t *testing.T) {
 			assert.Equal(t, "John Doe", details.DisplayName)
 			assert.Equal(t, "john@example.com", details.Email)
 			assert.NotEmpty(t, details.Password)
+			assert.Len(t, details.Password, adminGeneratedPasswordLength)
 			assert.NoError(t, mock.Ctx.Providers.PasswordPolicy.Check(details.Password))
 			generatedPassword = details.Password
 
@@ -157,6 +158,61 @@ func TestAdminUsersPOST_ShouldCreateGeneratedPasswordAndEmailIt(t *testing.T) {
 			values, ok := data.(templates.EmailEventValues)
 			assert.True(t, ok)
 			assert.Equal(t, "User Created", values.Details["Action"])
+			assert.Equal(t, generatedPassword, values.Details["Password"])
+
+			return nil
+		})
+
+	AdminUsersPOST(mock.Ctx)
+
+	bodyString := string(mock.Ctx.Response.Body())
+	assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
+	assert.Contains(t, bodyString, `"notification_sent":true`)
+	assert.NotContains(t, bodyString, generatedPassword)
+}
+
+func TestAdminUsersPOST_ShouldHonorGeneratedPasswordPolicyMinLength(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	policy := schema.PasswordPolicy{Standard: schema.PasswordPolicyStandard{
+		Enabled:          true,
+		MinLength:        24,
+		RequireLowercase: true,
+		RequireUppercase: true,
+		RequireNumber:    true,
+		RequireSpecial:   true,
+	}}
+	mock.Ctx.Configuration.PasswordPolicy = policy
+	mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(policy)
+
+	body := adminCreateUserRequestBody{
+		Username:    "john",
+		DisplayName: "John Doe",
+		Email:       "john@example.com",
+		Generate:    true,
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	assert.NoError(t, err)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
+
+	var generatedPassword string
+	mock.UserProviderMock.EXPECT().
+		CreateUser(gomock.AssignableToTypeOf(authentication.UserDetailsCreate{})).
+		DoAndReturn(func(details authentication.UserDetailsCreate) error {
+			assert.Len(t, details.Password, policy.Standard.MinLength)
+			assert.NoError(t, mock.Ctx.Providers.PasswordPolicy.Check(details.Password))
+			generatedPassword = details.Password
+
+			return nil
+		})
+	mock.NotifierMock.EXPECT().
+		Send(mock.Ctx, mail.Address{Name: "John Doe", Address: "john@example.com"}, "User created successfully", gomock.Any(), gomock.AssignableToTypeOf(templates.EmailEventValues{})).
+		DoAndReturn(func(_ any, _ mail.Address, _ string, _ *templates.EmailTemplate, data any) error {
+			values, ok := data.(templates.EmailEventValues)
+			assert.True(t, ok)
 			assert.Equal(t, generatedPassword, values.Details["Password"])
 
 			return nil
@@ -369,16 +425,18 @@ func TestAdminUserPATCH_ShouldSucceed(t *testing.T) {
 	mock.Ctx.SetUserValue("username", "john")
 	disabled := true
 	displayName := " John Doe "
+	email := " john@example.com "
 	groups := []string{" admins ", "", " users "}
-	body := adminUpdateUserRequestBody{DisplayName: &displayName, Groups: &groups, Disabled: &disabled}
+	body := adminUpdateUserRequestBody{DisplayName: &displayName, Email: &email, Groups: &groups, Disabled: &disabled}
 	bodyBytes, err := json.Marshal(body)
 	assert.NoError(t, err)
 	adminSetJSONBody(mock.Ctx, bodyBytes)
 
 	trimmed := "John Doe"
+	trimmedEmail := "john@example.com"
 	normalized := []string{"admins", "users"}
-	update := authentication.UserProviderAdminUserUpdate{DisplayName: &trimmed, Groups: &normalized, Disabled: &disabled}
-	result := authentication.UserProviderAdminUserDetails{Username: "john", DisplayName: "John Doe", Groups: normalized, Disabled: true}
+	update := authentication.UserProviderAdminUserUpdate{DisplayName: &trimmed, Email: &trimmedEmail, Groups: &normalized, Disabled: &disabled}
+	result := authentication.UserProviderAdminUserDetails{Username: "john", DisplayName: "John Doe", Email: "john@example.com", Groups: normalized, Disabled: true}
 	mock.UserProviderMock.EXPECT().AdminUpdateUser("john", update).Return(result, nil)
 
 	AdminUserPATCH(mock.Ctx)
@@ -400,6 +458,41 @@ func TestAdminUserPATCH_ShouldRejectBlankDisplayName(t *testing.T) {
 	AdminUserPATCH(mock.Ctx)
 
 	mock.AssertKO(t, messageDisplayNameRequired, fasthttp.StatusBadRequest)
+}
+
+func TestAdminUserPATCH_ShouldRejectBlankEmail(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.SetUserValue("username", "john")
+	email := "   "
+	bodyBytes, err := json.Marshal(adminUpdateUserRequestBody{Email: &email})
+	assert.NoError(t, err)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
+
+	AdminUserPATCH(mock.Ctx)
+
+	mock.AssertKO(t, adminUserEmailRequired, fasthttp.StatusBadRequest)
+}
+
+func TestAdminUserPATCH_ShouldFailWhenUserAlreadyExists(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.SetUserValue("username", "john")
+	email := "john@example.com"
+	bodyBytes, err := json.Marshal(adminUpdateUserRequestBody{Email: &email})
+	assert.NoError(t, err)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
+
+	update := authentication.UserProviderAdminUserUpdate{Email: &email}
+	mock.UserProviderMock.EXPECT().AdminUpdateUser("john", update).Return(authentication.UserProviderAdminUserDetails{}, authentication.ErrUserAlreadyExists)
+
+	AdminUserPATCH(mock.Ctx)
+
+	mock.AssertKO(t, messageUserAlreadyExists, fasthttp.StatusConflict)
 }
 
 func TestAdminUserPATCH_ShouldRejectNonJSONContentType(t *testing.T) {
@@ -497,6 +590,7 @@ func TestAdminUserPasswordPUT_ShouldResetGeneratedPasswordAndEmailItByDefault(t 
 		DoAndReturn(func(username, password string) error {
 			assert.Equal(t, "john", username)
 			assert.NotEmpty(t, password)
+			assert.Len(t, password, adminGeneratedPasswordLength)
 			assert.NoError(t, mock.Ctx.Providers.PasswordPolicy.Check(password))
 			generatedPassword = password
 
