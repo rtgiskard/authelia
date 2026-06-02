@@ -86,7 +86,7 @@ func (p *LDAPUserProvider) CreateUser(details UserDetailsCreate) (err error) {
 }
 
 func (p *LDAPUserProvider) AdminCapabilities() (capabilities UserProviderAdminCapabilities) {
-	return UserProviderAdminCapabilities{Create: false, List: false, Read: false, Update: false, ResetPassword: !p.disableResetPassword, Delete: false}
+	return UserProviderAdminCapabilities{}
 }
 
 func (p *LDAPUserProvider) AdminListUsers(filter UserProviderAdminListFilter) (result UserProviderAdminListResult, err error) {
@@ -102,11 +102,7 @@ func (p *LDAPUserProvider) AdminUpdateUser(username string, details UserProvider
 }
 
 func (p *LDAPUserProvider) AdminResetUserPassword(username string, password string) (err error) {
-	if p.disableResetPassword {
-		return ErrUnsupportedOperation
-	}
-
-	return p.UpdatePassword(username, password)
+	return ErrUnsupportedOperation
 }
 
 // CheckUserPassword checks if provided password matches for the given user.

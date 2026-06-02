@@ -27,6 +27,18 @@ func TestNewLDAPUserProvider(t *testing.T) {
 	assert.NotNil(t, provider)
 }
 
+func TestLDAPUserProviderShouldNotExposeAdminCapabilities(t *testing.T) {
+	provider := NewLDAPUserProviderWithFactory(&schema.AuthenticationBackendLDAP{}, false, nil)
+
+	assert.Equal(t, UserProviderAdminCapabilities{}, provider.AdminCapabilities())
+}
+
+func TestLDAPUserProviderShouldRejectAdminResetUserPassword(t *testing.T) {
+	provider := NewLDAPUserProviderWithFactory(&schema.AuthenticationBackendLDAP{}, false, nil)
+
+	assert.ErrorIs(t, provider.AdminResetUserPassword("john", "newpassword"), ErrUnsupportedOperation)
+}
+
 func TestShouldCreateRawConnectionWhenSchemeIsLDAP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
