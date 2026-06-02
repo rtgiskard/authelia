@@ -231,12 +231,13 @@ type changePasswordRequestBody struct {
 // adminCreateUserRequestBody model of the admin create user request body.
 type adminCreateUserRequestBody struct {
 	Username    string   `json:"username" valid:"required"`
-	Password    string   `json:"password" valid:"required"`
+	Password    string   `json:"password"`
 	DisplayName string   `json:"display_name" valid:"required"`
 	Email       string   `json:"email"`
 	Groups      []string `json:"groups"`
 	Disabled    bool     `json:"disabled"`
 	Notify      *bool    `json:"notify"`
+	Generate    bool     `json:"generate_password"`
 }
 
 type adminCreateUserResponseBody struct {
@@ -253,7 +254,15 @@ type adminUpdateUserRequestBody struct {
 }
 
 type adminResetPasswordRequestBody struct {
-	Password string `json:"password" valid:"required"`
+	Password string `json:"password"`
+	Generate bool   `json:"generate_password"`
+	Notify   *bool  `json:"notify"`
+}
+
+type adminResetPasswordResponseBody struct {
+	NotificationSent   bool   `json:"notification_sent"`
+	NotificationReason string `json:"notification_reason,omitempty"`
+	NotificationError  string `json:"notification_error,omitempty"`
 }
 
 // PasswordPolicyBody represents the response sent by the password reset step 2.

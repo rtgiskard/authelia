@@ -235,6 +235,7 @@ func handlerMain(ctx context.Context, config *schema.Configuration, providers mi
 		r.POST("/admin/api/v1/users", middlewareAdministration(handlers.AdminUsersPOST))
 		r.GET("/admin/api/v1/users/{username}", middlewareAdministration(handlers.AdminUserGET))
 		r.PATCH("/admin/api/v1/users/{username}", middlewareAdministration(handlers.AdminUserPATCH))
+		r.DELETE("/admin/api/v1/users/{username}", middlewareAdministration(handlers.AdminUserDELETE))
 		r.PUT("/admin/api/v1/users/{username}/password", middlewareAdministration(handlers.AdminUserPasswordPUT))
 	}
 

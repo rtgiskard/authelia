@@ -77,6 +77,7 @@ const (
 	messageUnableToListUsers                     = "Unable to list users."
 	messageUnableToGetUser                       = "Unable to get user."
 	messageUnableToUpdateUser                    = "Unable to update user."
+	messageUnableToDeleteUser                    = "Unable to delete user."
 	messageUnableToResetUserPassword             = "Unable to reset user password."
 	messageProviderOperationUnsupported          = "Operation unsupported by authentication provider."
 	messageUserNotFound                          = "User not found."

@@ -383,6 +383,7 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 		{fasthttp.MethodPost, "/admin/api/v1/users"},
 		{fasthttp.MethodGet, "/admin/api/v1/users/john"},
 		{fasthttp.MethodPatch, "/admin/api/v1/users/john"},
+		{fasthttp.MethodDelete, "/admin/api/v1/users/john"},
 		{fasthttp.MethodPut, "/admin/api/v1/users/john/password"},
 	}
 
