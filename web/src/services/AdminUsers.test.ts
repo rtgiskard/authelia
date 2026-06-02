@@ -186,6 +186,14 @@ it("lists users with a query", async () => {
     expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}?search=john+doe`, undefined);
 });
 
+it("normalizes null users from the list endpoint", async () => {
+    vi.mocked(Get).mockResolvedValue({ total: 0, users: null });
+
+    await expect(listAdminUsers("missing")).resolves.toEqual([]);
+
+    expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}?search=missing`, undefined);
+});
+
 it("gets user detail", async () => {
     vi.mocked(Get).mockResolvedValue({ username: "john" });
 

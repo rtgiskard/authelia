@@ -46,7 +46,7 @@ interface AdminUserManagementCapabilitiesResponse {
 
 interface AdminUserListResponse {
     total: number;
-    users: AdminUser[];
+    users: AdminUser[] | null;
 }
 
 interface AdminNotificationResponseBody {
@@ -114,7 +114,7 @@ export function listAdminUsers(query = "", signal?: AbortSignal) {
 
     const path = params.size > 0 ? `${AdminUsersPath}?${params.toString()}` : AdminUsersPath;
 
-    return Get<AdminUserListResponse>(path, signal).then((result) => result.users);
+    return Get<AdminUserListResponse>(path, signal).then((result) => result.users ?? []);
 }
 
 export function getAdminUser(username: string, signal?: AbortSignal) {

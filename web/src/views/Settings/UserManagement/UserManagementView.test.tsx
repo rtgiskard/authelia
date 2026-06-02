@@ -247,6 +247,35 @@ it("renders users returned by the list endpoint", async () => {
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 });
 
+it("shows an empty state when search has no matching users", async () => {
+    vi.mocked(listAdminUsers)
+        .mockResolvedValueOnce([
+            {
+                disabled: false,
+                display_name: "Alice Admin",
+                email: "alice@example.com",
+                groups: ["admins"],
+                username: "alice",
+            },
+        ])
+        .mockResolvedValueOnce([]);
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByText("alice", {}, { timeout: 3000 })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search Users"), {
+        target: { value: "missing-user" },
+    });
+
+    await waitFor(() => {
+        expect(listAdminUsers).toHaveBeenCalledWith("missing-user");
+    });
+
+    expect(await screen.findByText("No Matching Users", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("No users matched your search")).toBeInTheDocument();
+});
+
 it("creates a user with notify enabled when email is provided", async () => {
     vi.mocked(createAdminUser).mockResolvedValue({
         notification: { status: "sent" },
