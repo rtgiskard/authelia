@@ -25,6 +25,7 @@ type FileUserProviderDatabase interface {
 	CreateUserDetails(username string, details *FileUserDatabaseUserDetails) (err error)
 	GetUserDetails(username string) (user FileUserDatabaseUserDetails, err error)
 	ListUserDetails() (users []FileUserDatabaseUserDetails, err error)
+	DeleteUserDetails(username string) (err error)
 	UpdateUserDetails(username string, update func(details *FileUserDatabaseUserDetails) (err error)) (user FileUserDatabaseUserDetails, err error)
 	SetUserDetails(username string, details *FileUserDatabaseUserDetails)
 }
@@ -242,6 +243,46 @@ func (m *FileUserDatabase) CreateUserDetails(username string, details *FileUserD
 	created.Username = username
 
 	users[username] = created
+
+	database := &FileUserDatabase{
+		RWMutex:     &sync.RWMutex{},
+		Users:       users,
+		Emails:      map[string]string{},
+		Aliases:     map[string]string{},
+		Path:        m.Path,
+		SearchEmail: m.SearchEmail,
+		SearchCI:    m.SearchCI,
+		Extra:       m.Extra,
+	}
+
+	if err = database.LoadAliases(); err != nil {
+		return err
+	}
+
+	if err = database.ToDatabaseModel().Write(m.Path); err != nil {
+		return err
+	}
+
+	m.Users = database.Users
+	m.Emails = database.Emails
+	m.Aliases = database.Aliases
+
+	return nil
+}
+
+func (m *FileUserDatabase) DeleteUserDetails(username string) (err error) {
+	m.Lock()
+
+	defer m.Unlock()
+
+	_, key, ok := m.getUserDetailsWithKey(username)
+	if !ok {
+		return ErrUserNotFound
+	}
+
+	users := make(map[string]FileUserDatabaseUserDetails, len(m.Users)-1)
+	maps.Copy(users, m.Users)
+	delete(users, key)
 
 	database := &FileUserDatabase{
 		RWMutex:     &sync.RWMutex{},

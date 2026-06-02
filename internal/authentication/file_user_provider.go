@@ -125,7 +125,7 @@ func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
 }
 
 func (p *FileUserProvider) AdminCapabilities() (capabilities UserProviderAdminCapabilities) {
-	return UserProviderAdminCapabilities{Create: true, List: true, Read: true, Update: true, ResetPassword: true, Delete: false}
+	return UserProviderAdminCapabilities{Create: true, List: true, Read: true, Update: true, ResetPassword: true, Delete: true}
 }
 
 func (p *FileUserProvider) AdminListUsers(filter UserProviderAdminListFilter) (result UserProviderAdminListResult, err error) {
@@ -192,6 +192,18 @@ func (p *FileUserProvider) AdminUpdateUser(username string, update UserProviderA
 	p.mutex.Unlock()
 
 	return user.ToAdminUserDetails(), nil
+}
+
+func (p *FileUserProvider) AdminDeleteUser(username string) (err error) {
+	if err = p.database.DeleteUserDetails(username); err != nil {
+		return err
+	}
+
+	p.mutex.Lock()
+	p.setTimeoutReload(time.Now())
+	p.mutex.Unlock()
+
+	return nil
 }
 
 func (p *FileUserProvider) AdminResetUserPassword(username string, password string) (err error) {

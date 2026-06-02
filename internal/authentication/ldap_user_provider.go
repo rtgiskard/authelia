@@ -105,6 +105,10 @@ func (p *LDAPUserProvider) AdminResetUserPassword(username string, password stri
 	return ErrUnsupportedOperation
 }
 
+func (p *LDAPUserProvider) AdminDeleteUser(username string) (err error) {
+	return ErrUnsupportedOperation
+}
+
 // CheckUserPassword checks if provided password matches for the given user.
 func (p *LDAPUserProvider) CheckUserPassword(username string, password string) (valid bool, err error) {
 	var (

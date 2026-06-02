@@ -42,6 +42,18 @@ func (mr *MockUserProviderMockRecorder) AdminCapabilities() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminCapabilities", reflect.TypeOf((*MockUserProvider)(nil).AdminCapabilities))
 }
 
+func (m *MockUserProvider) AdminDeleteUser(username string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminDeleteUser", username)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (mr *MockUserProviderMockRecorder) AdminDeleteUser(username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminDeleteUser", reflect.TypeOf((*MockUserProvider)(nil).AdminDeleteUser), username)
+}
+
 func (m *MockUserProvider) AdminGetUser(username string) (authentication.UserProviderAdminUserDetails, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AdminGetUser", username)

@@ -895,7 +895,7 @@ func TestFileUserProviderAdminOperations(t *testing.T) {
 		provider := NewFileUserProvider(&config)
 
 		assert.NoError(t, provider.StartupCheck())
-		assert.Equal(t, UserProviderAdminCapabilities{Create: true, List: true, Read: true, Update: true, ResetPassword: true}, provider.AdminCapabilities())
+		assert.Equal(t, UserProviderAdminCapabilities{Create: true, List: true, Read: true, Update: true, ResetPassword: true, Delete: true}, provider.AdminCapabilities())
 
 		result, err := provider.AdminListUsers(UserProviderAdminListFilter{Search: "john"})
 		assert.NoError(t, err)
@@ -920,6 +920,10 @@ func TestFileUserProviderAdminOperations(t *testing.T) {
 		ok, err := provider.CheckUserPassword("john", "newpassword")
 		assert.NoError(t, err)
 		assert.True(t, ok)
+
+		assert.NoError(t, provider.AdminDeleteUser("john"))
+		_, err = provider.AdminGetUser("john")
+		assert.ErrorIs(t, err, ErrUserNotFound)
 	})
 }
 

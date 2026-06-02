@@ -21,6 +21,8 @@ type UserProvider interface {
 
 	AdminResetUserPassword(username string, password string) (err error)
 
+	AdminDeleteUser(username string) (err error)
+
 	// CheckUserPassword is used to check if a password matches for a specific user.
 	CheckUserPassword(username string, password string) (valid bool, err error)
 
