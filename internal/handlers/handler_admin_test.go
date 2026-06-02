@@ -158,6 +158,8 @@ func TestAdminUsersPOST_ShouldCreateGeneratedPasswordAndEmailIt(t *testing.T) {
 			values, ok := data.(templates.EmailEventValues)
 			assert.True(t, ok)
 			assert.Equal(t, "User Created", values.Details["Action"])
+			assert.Equal(t, "john", values.Details["Username"])
+			assert.Equal(t, "john@example.com", values.Details["Email"])
 			assert.Equal(t, generatedPassword, values.Details["Password"])
 
 			return nil
@@ -213,6 +215,9 @@ func TestAdminUsersPOST_ShouldHonorGeneratedPasswordPolicyMinLength(t *testing.T
 		DoAndReturn(func(_ any, _ mail.Address, _ string, _ *templates.EmailTemplate, data any) error {
 			values, ok := data.(templates.EmailEventValues)
 			assert.True(t, ok)
+			assert.Equal(t, "User Created", values.Details["Action"])
+			assert.Equal(t, "john", values.Details["Username"])
+			assert.Equal(t, "john@example.com", values.Details["Email"])
 			assert.Equal(t, generatedPassword, values.Details["Password"])
 
 			return nil
@@ -402,6 +407,24 @@ func TestAdminUsersGET_ShouldSucceed(t *testing.T) {
 	AdminUsersGET(mock.Ctx)
 
 	mock.Assert200OK(t, result)
+}
+
+func TestAdminUsersGET_ShouldReturnEmptyUsersArrayWhenNoUsersMatch(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.QueryArgs().Set("search", "missing")
+
+	result := authentication.UserProviderAdminListResult{Total: 0}
+	mock.UserProviderMock.EXPECT().AdminListUsers(authentication.UserProviderAdminListFilter{Search: "missing"}).Return(result, nil)
+
+	AdminUsersGET(mock.Ctx)
+
+	body := string(mock.Ctx.Response.Body())
+	assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
+	assert.Contains(t, body, `"users":[]`)
+	assert.NotContains(t, body, `"users":null`)
 }
 
 func TestAdminUserGET_ShouldReturnNotFound(t *testing.T) {
@@ -622,6 +645,8 @@ func TestAdminUserPasswordPUT_ShouldResetGeneratedPasswordAndEmailItByDefault(t 
 			values, ok := data.(templates.EmailEventValues)
 			assert.True(t, ok)
 			assert.Equal(t, "Password Reset", values.Details["Action"])
+			assert.Equal(t, "john", values.Details["Username"])
+			assert.Equal(t, "john@example.com", values.Details["Email"])
 			assert.Equal(t, generatedPassword, values.Details["Password"])
 
 			return nil
@@ -713,6 +738,8 @@ func TestAdminUserPasswordPUT_ShouldNotSuppressGeneratedPasswordEmailWhenNotifyF
 			values, ok := data.(templates.EmailEventValues)
 			assert.True(t, ok)
 			assert.Equal(t, "Password Reset", values.Details["Action"])
+			assert.Equal(t, "john", values.Details["Username"])
+			assert.Equal(t, "john@example.com", values.Details["Email"])
 			assert.Equal(t, generatedPassword, values.Details["Password"])
 
 			return nil

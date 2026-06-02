@@ -122,6 +122,9 @@ func AdminUsersGET(ctx *middlewares.AutheliaCtx) {
 		handleAdminUserProviderError(ctx, err, messageUnableToListUsers)
 		return
 	}
+	if result.Users == nil {
+		result.Users = []authentication.UserProviderAdminUserDetails{}
+	}
 
 	if err = ctx.SetJSONBody(result); err != nil {
 		ctx.Logger.WithError(err).Error(errStrRespBody)
@@ -281,7 +284,9 @@ func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.
 	}
 
 	detailValues := map[string]any{
-		"Action": "User Created",
+		"Action":   "User Created",
+		"Username": details.Username,
+		"Email":    details.Email,
 	}
 	if generatedPassword != "" {
 		detailValues["Password"] = generatedPassword
@@ -332,6 +337,8 @@ func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authenticati
 		RemoteIP:    ctx.RemoteIP().String(),
 		Details: map[string]any{
 			"Action":   "Password Reset",
+			"Username": details.Username,
+			"Email":    details.Email,
 			"Password": generatedPassword,
 		},
 		BodyPrefix: "your",
