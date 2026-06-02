@@ -10,6 +10,7 @@ import {
     getAdminUserManagementCapabilities,
     listAdminUsers,
     resetAdminUserPassword,
+    updateAdminUser,
 } from "@services/AdminUsers";
 import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
 import { type UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
@@ -143,6 +144,7 @@ beforeEach(() => {
     vi.mocked(getUserSessionElevation).mockReset();
     vi.mocked(listAdminUsers).mockReset();
     vi.mocked(resetAdminUserPassword).mockReset();
+    vi.mocked(updateAdminUser).mockReset();
     vi.mocked(getUserSessionElevation).mockResolvedValue({
         can_skip_second_factor: false,
         elevated: true,
@@ -180,6 +182,7 @@ beforeEach(() => {
         require_uppercase: false,
     });
     vi.mocked(resetAdminUserPassword).mockResolvedValue(undefined);
+    vi.mocked(updateAdminUser).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -357,6 +360,93 @@ it("creates a user with a generated password notification payload", async () => 
             username: "generated-user",
         });
     });
+});
+
+it("shows duplicate identity feedback while creating a user", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Create User" }));
+
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 3000 });
+
+    fireEvent.change(within(dialog).getByLabelText("Username *"), {
+        target: { value: "alice" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Email *"), {
+        target: { value: "alice@example.com" },
+    });
+
+    expect(await within(dialog).findByText("Username is already in use")).toBeInTheDocument();
+    expect(within(dialog).getByText("Email is already in use")).toBeInTheDocument();
+});
+
+it("requires an email address when editing a user", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Edit User alice" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Edit User" }, { timeout: 3000 });
+    const emailField = within(dialog).getByLabelText("Email *");
+
+    fireEvent.change(emailField, { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    expect(mockCreateErrorNotification).toHaveBeenCalledWith("Email is required");
+    expect(updateAdminUser).not.toHaveBeenCalled();
+    expect(emailField).toHaveAttribute("aria-invalid", "true");
+});
+
+it("shows duplicate email feedback while editing a user", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+        {
+            disabled: false,
+            display_name: "Bob Admin",
+            email: "bob@example.com",
+            groups: ["admins"],
+            username: "bob",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Edit User alice" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Edit User" }, { timeout: 3000 });
+    fireEvent.change(within(dialog).getByLabelText("Email *"), {
+        target: { value: "bob@example.com" },
+    });
+
+    expect(await within(dialog).findByText("Email is already in use")).toBeInTheDocument();
 });
 
 it("shows verification without opening elevation dialogs when elevation is required on initial render", async () => {
@@ -566,32 +656,59 @@ it("hides delete actions and uses clearer sign-in labels when delete is unavaila
 
     await screen.findByText("alice", {}, { timeout: 3000 });
 
-    expect(screen.getByRole("button", { name: "Block Sign-In alice" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Disable User alice" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disable User alice" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete User alice" })).not.toBeInTheDocument();
 });
 
 it("uses client-side pagination for listed users", async () => {
     vi.mocked(listAdminUsers).mockResolvedValue(
-        Array.from({ length: 6 }, (_value, index) => ({
+        Array.from({ length: 21 }, (_value, index) => ({
             disabled: false,
             display_name: `User ${index + 1}`,
             email: `user-${index + 1}@example.com`,
             groups: [],
-            username: `user-${index + 1}`,
+            username: `user-${String(index + 1).padStart(2, "0")}`,
         })),
     );
 
     render(<UserManagementView />);
 
-    expect(await screen.findByText("user-1", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText("user-5")).toBeInTheDocument();
-    expect(screen.queryByText("user-6")).not.toBeInTheDocument();
+    expect(await screen.findByText("user-01", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("user-20")).toBeInTheDocument();
+    expect(screen.queryByText("user-21")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Go to next page"));
 
-    expect(await screen.findByText("user-6", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.queryByText("user-1")).not.toBeInTheDocument();
+    expect(await screen.findByText("user-21", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("user-01")).not.toBeInTheDocument();
+});
+
+it("sorts users by status from the status header", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+        {
+            disabled: true,
+            display_name: "Bob Admin",
+            email: "bob@example.com",
+            groups: ["admins"],
+            username: "bob",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+    expect(within(screen.getAllByRole("row")[1]).getByText("alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Status" }));
+
+    expect(within(screen.getAllByRole("row")[1]).getByText("bob")).toBeInTheDocument();
 });
 
 it("resets a user password with a generated password notification payload", async () => {

@@ -38,6 +38,7 @@ import {
     TableHead,
     TablePagination,
     TableRow,
+    TableSortLabel,
     TextField,
     Tooltip,
     Typography,
@@ -96,6 +97,12 @@ interface PasswordResetUserDetails {
 interface FieldErrors {
     email: boolean;
     password: boolean;
+    username: boolean;
+}
+
+interface FieldHelperText {
+    email?: string;
+    username?: string;
 }
 
 interface ConfirmDialogProps {
@@ -111,6 +118,7 @@ interface ConfirmDialogProps {
 interface UserDialogProps {
     canNotify: boolean;
     errors: FieldErrors;
+    helperText?: FieldHelperText;
     loading: boolean;
     onClose: () => void;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -174,6 +182,7 @@ const defaultPasswordResetUserDetails: PasswordResetUserDetails = {
 const defaultFieldErrors: FieldErrors = {
     email: false,
     password: false,
+    username: false,
 };
 
 const defaultPasswordPolicy: PasswordPolicyConfiguration = {
@@ -187,7 +196,9 @@ const defaultPasswordPolicy: PasswordPolicyConfiguration = {
     require_uppercase: false,
 };
 
-const rowsPerPageOptions = [5, 10, 25];
+const rowsPerPageOptions = [10, 20, 40, 60];
+
+type StatusSortDirection = "asc" | "desc";
 
 const toGroupsArray = (value: string) =>
     value
@@ -247,6 +258,21 @@ const fromUser = (user: AdminUser): UserFormValues => ({
     username: user.username,
 });
 
+const identityEquals = (a: string, b: string) =>
+    a.trim().localeCompare(b.trim(), undefined, { sensitivity: "accent" }) === 0;
+
+const hasUsernameConflict = (users: AdminUser[], username: string) =>
+    username.trim() !== "" &&
+    users.some((user) => identityEquals(user.username, username) || identityEquals(user.email, username));
+
+const hasEmailConflict = (users: AdminUser[], email: string, currentUsername = "") =>
+    email.trim() !== "" &&
+    users.some(
+        (user) =>
+            !identityEquals(user.username, currentUsername) &&
+            (identityEquals(user.email, email) || identityEquals(user.username, email)),
+    );
+
 const UserManagementView = () => {
     const { t: translate } = useTranslation("settings");
     const { createErrorNotification, createInfoNotification, createSuccessNotification, createWarnNotification } =
@@ -266,6 +292,7 @@ const UserManagementView = () => {
     const [dialogIVOpening, setDialogIVOpening] = useState(false);
 
     const [users, setUsers] = useState<AdminUser[]>([]);
+    const [identityUsers, setIdentityUsers] = useState<AdminUser[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
     const [usersError, setUsersError] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -279,6 +306,7 @@ const UserManagementView = () => {
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editUsername, setEditUsername] = useState("");
     const [editValues, setEditValues] = useState<UserFormValues>(defaultEditValues);
+    const [editErrors, setEditErrors] = useState<FieldErrors>(defaultFieldErrors);
 
     const [passwordResetOpen, setPasswordResetOpen] = useState(false);
     const [passwordResetLoading, setPasswordResetLoading] = useState(false);
@@ -301,7 +329,8 @@ const UserManagementView = () => {
 
     const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicyConfiguration>(defaultPasswordPolicy);
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
+    const [statusSortDirection, setStatusSortDirection] = useState<StatusSortDirection>("asc");
 
     const isSupported = capabilities?.supported ?? false;
     const canList = capabilities?.can_list ?? false;
@@ -313,9 +342,43 @@ const UserManagementView = () => {
     const hasMutatingCapabilities = canCreate || canDelete || canUpdate || canResetPassword;
     const verificationOpening =
         !capabilitiesInitialized && !capabilitiesLoading && !capabilitiesError && !elevationCancelled;
+    const sortedUsers = useMemo(() => {
+        const nextUsers = [...users];
+        nextUsers.sort((a, b) => {
+            if (a.disabled === b.disabled) {
+                return a.username.localeCompare(b.username);
+            }
+
+            const result = a.disabled ? 1 : -1;
+
+            return statusSortDirection === "asc" ? result : -result;
+        });
+
+        return nextUsers;
+    }, [statusSortDirection, users]);
     const pagedUsers = useMemo(
-        () => users.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-        [page, rowsPerPage, users],
+        () => sortedUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+        [page, rowsPerPage, sortedUsers],
+    );
+
+    const createHelperText = useMemo(
+        () => ({
+            email: hasEmailConflict(identityUsers, createValues.email)
+                ? translate("Email is already in use")
+                : undefined,
+            username: hasUsernameConflict(identityUsers, createValues.username)
+                ? translate("Username is already in use")
+                : undefined,
+        }),
+        [createValues.email, createValues.username, identityUsers, translate],
+    );
+    const editHelperText = useMemo(
+        () => ({
+            email: hasEmailConflict(identityUsers, editValues.email, editUsername)
+                ? translate("Email is already in use")
+                : undefined,
+        }),
+        [editUsername, editValues.email, identityUsers, translate],
     );
 
     const fetchCapabilities = useCallback(async () => {
@@ -486,6 +549,9 @@ const UserManagementView = () => {
         try {
             const result = await listAdminUsers(searchQuery);
             setUsers(result);
+            if (searchQuery.trim() === "") {
+                setIdentityUsers(result);
+            }
             setPage(0);
         } catch (error) {
             console.error(error);
@@ -567,6 +633,7 @@ const UserManagementView = () => {
         setCreateValues(defaultCreateValues);
         setCreateErrors(defaultFieldErrors);
         setCreateOpen(true);
+        listAdminUsers("").then(setIdentityUsers).catch(console.error);
     };
 
     const handleCloseCreate = () => {
@@ -588,16 +655,35 @@ const UserManagementView = () => {
         const nextErrors = {
             email: payload.email === "",
             password: !payload.generate_password && (payload.password ?? "") === "",
+            username: payload.username === "",
         };
+        const usernameConflict = hasUsernameConflict(identityUsers, payload.username);
+        const emailConflict = hasEmailConflict(identityUsers, payload.email);
 
-        setCreateErrors(nextErrors);
+        setCreateErrors({
+            ...nextErrors,
+            email: nextErrors.email || emailConflict,
+            username: nextErrors.username || usernameConflict,
+        });
 
-        if (payload.username === "" || payload.display_name === "" || nextErrors.email || nextErrors.password) {
-            createErrorNotification(
-                nextErrors.email
-                    ? translate("Email is required")
-                    : translate("Username, display name, and password are required"),
-            );
+        if (
+            payload.username === "" ||
+            payload.display_name === "" ||
+            nextErrors.email ||
+            nextErrors.password ||
+            usernameConflict ||
+            emailConflict
+        ) {
+            let message = translate("Username, display name, and password are required");
+            if (nextErrors.email) {
+                message = translate("Email is required");
+            } else if (usernameConflict) {
+                message = translate("Username is already in use");
+            } else if (emailConflict) {
+                message = translate("Email is already in use");
+            }
+
+            createErrorNotification(message);
 
             return;
         }
@@ -632,6 +718,8 @@ const UserManagementView = () => {
         setEditUsername(username);
         setEditOpen(true);
         setEditLoading(true);
+        setEditErrors(defaultFieldErrors);
+        listAdminUsers("").then(setIdentityUsers).catch(console.error);
 
         try {
             const user = await getAdminUser(username);
@@ -658,15 +746,32 @@ const UserManagementView = () => {
         setEditLoading(false);
         setEditUsername("");
         setEditValues(defaultEditValues);
+        setEditErrors(defaultFieldErrors);
     };
 
     const handleEdit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
         const payload = toUpdatePayload(editValues);
+        const emailMissing = payload.email === "";
+        const emailConflict = hasEmailConflict(identityUsers, payload.email, editUsername);
+
+        setEditErrors({
+            email: emailMissing || emailConflict,
+            password: false,
+            username: false,
+        });
 
         if (payload.display_name === "") {
             createErrorNotification(translate("Display name is required"));
+
+            return;
+        }
+
+        if (emailMissing || emailConflict) {
+            createErrorNotification(
+                emailMissing ? translate("Email is required") : translate("Email is already in use"),
+            );
 
             return;
         }
@@ -774,6 +879,11 @@ const UserManagementView = () => {
         setToggleConfirmOpen(true);
     };
 
+    const handleStatusSort = () => {
+        setStatusSortDirection((previous) => (previous === "asc" ? "desc" : "asc"));
+        setPage(0);
+    };
+
     const handleCloseToggleDialog = () => {
         if (toggleSubmitting) {
             return;
@@ -851,7 +961,7 @@ const UserManagementView = () => {
 
     const readOnlyNotice = isSupported && canList && !hasMutatingCapabilities;
 
-    const currentToggleAction = toggleNextDisabled ? translate("Block Sign-In") : translate("Allow Sign-In");
+    const currentToggleAction = toggleNextDisabled ? translate("Disable User") : translate("Enable User");
 
     return (
         <Fragment>
@@ -873,6 +983,7 @@ const UserManagementView = () => {
             <UserDialog
                 canNotify={canNotify}
                 errors={createErrors}
+                helperText={createHelperText}
                 loading={createSubmitting}
                 onClose={handleCloseCreate}
                 onSubmit={handleCreate}
@@ -888,7 +999,8 @@ const UserManagementView = () => {
 
             <UserDialog
                 canNotify={canNotify}
-                errors={defaultFieldErrors}
+                errors={editErrors}
+                helperText={editHelperText}
                 loading={editLoading || editSubmitting}
                 onClose={handleCloseEdit}
                 onSubmit={handleEdit}
@@ -1085,6 +1197,11 @@ const UserManagementView = () => {
                                                     id="user-management-search"
                                                     label={translate("Search Users")}
                                                     size="small"
+                                                    sx={{
+                                                        flexBasis: { md: 420 },
+                                                        flexGrow: { md: 0 },
+                                                        maxWidth: { md: 520 },
+                                                    }}
                                                     value={searchQuery}
                                                     onChange={(event) => handleSearchChange(event.target.value)}
                                                     slotProps={{
@@ -1097,10 +1214,19 @@ const UserManagementView = () => {
                                                         },
                                                     }}
                                                 />
-                                                <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                                                <Stack
+                                                    direction="row"
+                                                    spacing={1}
+                                                    sx={{
+                                                        flexShrink: 0,
+                                                        justifyContent: "flex-end",
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
                                                     <Button
                                                         onClick={handleRefresh}
                                                         startIcon={<Refresh />}
+                                                        sx={{ minWidth: 112 }}
                                                         variant="outlined"
                                                     >
                                                         {translate("Refresh")}
@@ -1109,6 +1235,7 @@ const UserManagementView = () => {
                                                         <Button
                                                             onClick={handleOpenCreate}
                                                             startIcon={<Add />}
+                                                            sx={{ minWidth: 144 }}
                                                             variant="contained"
                                                         >
                                                             {translate("Create User")}
@@ -1184,7 +1311,9 @@ const UserManagementView = () => {
                                                         onDelete={openDeleteDialog}
                                                         onEdit={openEditDialog}
                                                         onResetPassword={openPasswordResetDialog}
+                                                        onStatusSort={handleStatusSort}
                                                         onToggle={openToggleDialog}
+                                                        statusSortDirection={statusSortDirection}
                                                         translate={translate}
                                                         users={pagedUsers}
                                                     />
@@ -1255,6 +1384,7 @@ const UserManagementView = () => {
 const UserDialog = ({
     canNotify,
     errors,
+    helperText = {},
     loading,
     onClose,
     onSubmit,
@@ -1294,7 +1424,9 @@ const UserDialog = ({
                         <DialogContentText sx={{ mb: 0.5 }}>{subtitle}</DialogContentText>
                         <TextField
                             disabled={loading || readOnlyUsername}
+                            error={errors.username || Boolean(helperText.username)}
                             fullWidth
+                            helperText={helperText.username}
                             label={translate("Username")}
                             required
                             value={values.username}
@@ -1320,10 +1452,11 @@ const UserDialog = ({
                         />
                         <TextField
                             disabled={loading}
-                            error={errors.email}
+                            error={errors.email || Boolean(helperText.email)}
                             fullWidth
+                            helperText={helperText.email}
                             label={translate("Email")}
-                            required={showPassword}
+                            required
                             type="email"
                             value={values.email}
                             onChange={(event) =>
@@ -1596,6 +1729,11 @@ interface UserCollectionProps {
     users: AdminUser[];
 }
 
+interface UserTableProps extends UserCollectionProps {
+    onStatusSort: () => void;
+    statusSortDirection: StatusSortDirection;
+}
+
 const UserTable = ({
     canDelete,
     canResetPassword,
@@ -1603,10 +1741,12 @@ const UserTable = ({
     onDelete,
     onEdit,
     onResetPassword,
+    onStatusSort,
     onToggle,
+    statusSortDirection,
     translate,
     users,
-}: UserCollectionProps) => {
+}: UserTableProps) => {
     const theme = useTheme();
 
     return (
@@ -1646,7 +1786,11 @@ const UserTable = ({
                         <TableCell>{translate("Display Name")}</TableCell>
                         <TableCell>{translate("Email")}</TableCell>
                         <TableCell>{translate("Groups")}</TableCell>
-                        <TableCell>{translate("Status")}</TableCell>
+                        <TableCell>
+                            <TableSortLabel active direction={statusSortDirection} onClick={onStatusSort}>
+                                {translate("Status")}
+                            </TableSortLabel>
+                        </TableCell>
                         <TableCell align="right">{translate("Actions")}</TableCell>
                     </TableRow>
                 </TableHead>
@@ -1817,9 +1961,9 @@ const RowActions = ({
             </Tooltip>
         ) : null}
         {canUpdate ? (
-            <Tooltip title={user.disabled ? translate("Allow Sign-In") : translate("Block Sign-In")}>
+            <Tooltip title={user.disabled ? translate("Enable User") : translate("Disable User")}>
                 <IconButton
-                    aria-label={`${user.disabled ? translate("Allow Sign-In") : translate("Block Sign-In")} ${user.username}`}
+                    aria-label={`${user.disabled ? translate("Enable User") : translate("Disable User")} ${user.username}`}
                     onClick={onToggle}
                     size="small"
                     sx={{ color: "text.secondary" }}
