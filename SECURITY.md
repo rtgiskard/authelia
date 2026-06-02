@@ -1,5 +1,16 @@
 # Security Policy
 
+## Fork Notice
+
+This repository is maintained as the `rtgiskard/authelia` development fork. Security issues that only affect this fork,
+including fork-only admin user management, release, packaging, or deployment changes, should be reported to the fork
+maintainer via the GitHub Security Advisory flow for `rtgiskard/authelia` when available, or privately to the fork
+maintainer through a non-public channel.
+
+Do not report fork-only vulnerabilities to upstream Authelia contacts unless the same issue is reproducible in upstream
+Authelia. Upstream references below are preserved for attribution and for vulnerabilities that also affect upstream
+Authelia.
+
 ## Prologue
 
 The __Authelia__ team takes security very seriously. Because __Authelia__ is intended as a security product a lot of
