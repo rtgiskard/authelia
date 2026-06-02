@@ -159,6 +159,9 @@ const toPasswordResetPayload = (values: PasswordResetFormValues): AdminPasswordR
     password: values.password,
 });
 
+const isElevationSatisfied = (elevation?: UserSessionElevation) =>
+    elevation ? elevation.elevated || elevation.skip_second_factor : false;
+
 const fromUser = (user: AdminUser): UserFormValues => ({
     disabled: user.disabled,
     displayName: user.display_name,
@@ -289,7 +292,32 @@ const UserManagementView = () => {
             const elevationResult = await getUserSessionElevation();
             setElevation(elevationResult);
 
-            if (elevationResult && (elevationResult.elevated || elevationResult.skip_second_factor)) {
+            if (isElevationSatisfied(elevationResult)) {
+                await fetchCapabilities();
+                return;
+            }
+
+            setCapabilitiesLoading(false);
+            setElevationCancelled(true);
+        } catch (error) {
+            console.error(error);
+            setCapabilitiesLoading(false);
+            setCapabilitiesError(true);
+            setCapabilitiesInitialized(true);
+        }
+    }, [fetchCapabilities]);
+
+    const handleStartElevation = useCallback(async () => {
+        setCapabilitiesLoading(true);
+        setCapabilitiesError(false);
+        setCapabilitiesInitialized(false);
+        setElevationCancelled(false);
+
+        try {
+            const elevationResult = await getUserSessionElevation();
+            setElevation(elevationResult);
+
+            if (isElevationSatisfied(elevationResult)) {
                 await fetchCapabilities();
                 return;
             }
@@ -409,7 +437,7 @@ const UserManagementView = () => {
     };
 
     const handleCapabilityRetry = () => {
-        handleLoadCapabilities().catch(console.error);
+        handleStartElevation().catch(console.error);
     };
 
     const handleOpenCreate = () => {

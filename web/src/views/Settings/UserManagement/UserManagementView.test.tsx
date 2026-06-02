@@ -249,8 +249,35 @@ it("creates a user with notify enabled when email is provided", async () => {
     expect(mockCreateSuccessNotification).toHaveBeenCalledWith("User created successfully");
 });
 
+it("shows verification without opening elevation dialogs when elevation is required on initial render", async () => {
+    vi.mocked(getUserSessionElevation).mockResolvedValueOnce({
+        can_skip_second_factor: false,
+        elevated: false,
+        expires: 0,
+        factor_knowledge: false,
+        require_second_factor: true,
+        skip_second_factor: false,
+    });
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByText("Verification", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByTestId("second-factor-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("identity-dialog")).not.toBeInTheDocument();
+    expect(getAdminUserManagementCapabilities).not.toHaveBeenCalled();
+    expect(listAdminUsers).not.toHaveBeenCalled();
+});
+
 it("gates capabilities behind elevation and walks through second factor then identity verification", async () => {
     vi.mocked(getUserSessionElevation)
+        .mockResolvedValueOnce({
+            can_skip_second_factor: false,
+            elevated: false,
+            expires: 0,
+            factor_knowledge: false,
+            require_second_factor: true,
+            skip_second_factor: false,
+        })
         .mockResolvedValueOnce({
             can_skip_second_factor: false,
             elevated: false,
@@ -269,6 +296,13 @@ it("gates capabilities behind elevation and walks through second factor then ide
         });
 
     render(<UserManagementView />);
+
+    expect(await screen.findByText("Verification", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByTestId("second-factor-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("identity-dialog")).not.toBeInTheDocument();
+    expect(getAdminUserManagementCapabilities).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
 
     await screen.findByTestId("second-factor-dialog", {}, { timeout: 3000 });
     expect(getAdminUserManagementCapabilities).not.toHaveBeenCalled();
@@ -305,9 +339,22 @@ it("cancels elevation without surfacing a capabilities error", async () => {
             factor_knowledge: false,
             require_second_factor: true,
             skip_second_factor: false,
+        })
+        .mockResolvedValueOnce({
+            can_skip_second_factor: false,
+            elevated: false,
+            expires: 0,
+            factor_knowledge: false,
+            require_second_factor: true,
+            skip_second_factor: false,
         });
 
     render(<UserManagementView />);
+
+    expect(await screen.findByText("Verification", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByTestId("second-factor-dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
 
     await screen.findByTestId("second-factor-dialog", {}, { timeout: 3000 });
     fireEvent.click(screen.getByRole("button", { name: "sf-cancel" }));
@@ -345,9 +392,22 @@ it("cancels identity verification with a recovery action", async () => {
             factor_knowledge: false,
             require_second_factor: true,
             skip_second_factor: false,
+        })
+        .mockResolvedValueOnce({
+            can_skip_second_factor: false,
+            elevated: false,
+            expires: 0,
+            factor_knowledge: false,
+            require_second_factor: true,
+            skip_second_factor: false,
         });
 
     render(<UserManagementView />);
+
+    expect(await screen.findByText("Verification", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByTestId("second-factor-dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
 
     await screen.findByTestId("second-factor-dialog", {}, { timeout: 3000 });
     fireEvent.click(screen.getByRole("button", { name: "sf-success" }));

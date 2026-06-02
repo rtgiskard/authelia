@@ -1,4 +1,5 @@
-import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 
 import {
     Box,
@@ -16,11 +17,11 @@ import OneTimeCodeTextField from "@components/OneTimeCodeTextField";
 import SuccessIcon from "@components/SuccessIcon";
 import { useNotifications } from "@contexts/NotificationsContext";
 import {
-    UserSessionElevation,
     deleteUserSessionElevation,
     generateUserSessionElevation,
     verifyUserSessionElevation,
 } from "@services/UserSessionElevation";
+import type { UserSessionElevation } from "@services/UserSessionElevation";
 
 type Props = {
     elevation?: UserSessionElevation;
@@ -29,22 +30,24 @@ type Props = {
     handleOpened: () => void;
 };
 
-const IdentityVerificationDialog = function (props: Props) {
+const IdentityVerificationDialog = (props: Props) => {
     const { elevation, handleClosed, handleOpened, opening } = props;
     const { t: translate } = useTranslation("settings");
     const { createErrorNotification } = useNotifications();
 
     const [closing, setClosing] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
     const [success, setSuccess] = useState(false);
 
     const [codeInput, setCodeInput] = useState("");
     const [codeDelete, setCodeDelete] = useState<string>();
     const [codeError, setCodeError] = useState(false);
-    const [ready, setReady] = useState(false);
     const codeRef = useRef<HTMLInputElement>(null);
+    const generationInFlightRef = useRef(false);
+    const openingConsumedRef = useRef(false);
 
-    const open = useMemo(() => ready && !closing && opening && !!elevation, [ready, closing, opening, elevation]);
+    const dialogOpen = open && !closing && !!elevation;
 
     const handleClose = useCallback(
         (ok: boolean) => {
@@ -52,9 +55,10 @@ const IdentityVerificationDialog = function (props: Props) {
             setCodeDelete(undefined);
             setCodeError(false);
             setLoading(false);
+            setOpen(false);
             setSuccess(false);
             setClosing(false);
-            setReady(false);
+            generationInFlightRef.current = false;
             handleClosed(ok);
         },
         [handleClosed],
@@ -123,26 +127,36 @@ const IdentityVerificationDialog = function (props: Props) {
     );
 
     useEffect(() => {
-        if (closing || !opening || !elevation) {
+        if (!opening && !open) {
+            openingConsumedRef.current = false;
+        }
+    }, [opening, open]);
+
+    useEffect(() => {
+        if (closing || !opening || !elevation || open || generationInFlightRef.current || openingConsumedRef.current) {
             return;
         }
 
-        if (ready) return;
+        openingConsumedRef.current = true;
+        generationInFlightRef.current = true;
 
         generateUserSessionElevation()
             .then((attempt) => {
                 if (!attempt) throw new Error("Failed to load the data.");
 
                 setCodeDelete(attempt.delete_id);
+                setOpen(true);
                 handleOpened();
-                setReady(true);
             })
             .catch((error) => {
                 console.error(error);
                 createErrorNotification(translate("Failed to generate the One-Time Code. Please try again later."));
                 handleClose(false);
+            })
+            .finally(() => {
+                generationInFlightRef.current = false;
             });
-    }, [closing, opening, elevation, ready, translate, handleClose, handleOpened, createErrorNotification]);
+    }, [closing, opening, elevation, open, translate, handleClose, handleOpened, createErrorNotification]);
 
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setCodeInput(e.target.value.replaceAll(/\s/g, ""));
@@ -150,7 +164,7 @@ const IdentityVerificationDialog = function (props: Props) {
     };
 
     return (
-        <Dialog id={"dialog-verify-one-time-code"} open={open} onClose={handleCancelled}>
+        <Dialog id={"dialog-verify-one-time-code"} open={dialogOpen} onClose={handleCancelled}>
             <DialogTitle>{translate("Identity Verification")}</DialogTitle>
             {success ? (
                 <DialogContent>
