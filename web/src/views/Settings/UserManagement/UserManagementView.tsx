@@ -37,6 +37,7 @@ import { alpha, useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 
 import { useNotifications } from "@contexts/NotificationsContext";
+import { useUserInfoGET } from "@hooks/UserInfo";
 import {
     type AdminCreateUserNotificationStatus,
     type AdminCreateUserPayload,
@@ -52,6 +53,9 @@ import {
     resetAdminUserPassword,
     updateAdminUser,
 } from "@services/AdminUsers";
+import { type UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
+import IdentityVerificationDialog from "@views/Settings/Common/IdentityVerificationDialog";
+import SecondFactorDialog from "@views/Settings/Common/SecondFactorDialog";
 
 interface UserFormValues {
     disabled: boolean;
@@ -172,9 +176,16 @@ const UserManagementView = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+    const [userInfo, fetchUserInfo, , fetchUserInfoError] = useUserInfoGET();
+
     const [capabilities, setCapabilities] = useState<AdminUserManagementCapabilities>();
     const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
     const [capabilitiesError, setCapabilitiesError] = useState(false);
+    const [capabilitiesInitialized, setCapabilitiesInitialized] = useState(false);
+    const [elevation, setElevation] = useState<UserSessionElevation>();
+    const [elevationCancelled, setElevationCancelled] = useState(false);
+    const [dialogSFOpening, setDialogSFOpening] = useState(false);
+    const [dialogIVOpening, setDialogIVOpening] = useState(false);
 
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
@@ -216,13 +227,131 @@ const UserManagementView = () => {
         try {
             const result = await getAdminUserManagementCapabilities();
             setCapabilities(result);
+            setCapabilitiesInitialized(true);
         } catch (error) {
             console.error(error);
             setCapabilitiesError(true);
+            setCapabilitiesInitialized(true);
         } finally {
             setCapabilitiesLoading(false);
         }
     }, []);
+
+    const handleResetStateOpening = useCallback(() => {
+        setDialogSFOpening(false);
+        setDialogIVOpening(false);
+    }, []);
+
+    const handleResetState = useCallback(() => {
+        handleResetStateOpening();
+
+        setElevation(undefined);
+        setCapabilities(undefined);
+        setCapabilitiesLoading(false);
+        setCapabilitiesError(false);
+        setCapabilitiesInitialized(false);
+        setElevationCancelled(false);
+    }, [handleResetStateOpening]);
+
+    const handleElevationCancelled = useCallback(() => {
+        handleResetStateOpening();
+
+        setElevation(undefined);
+        setCapabilities(undefined);
+        setCapabilitiesLoading(false);
+        setCapabilitiesError(false);
+        setCapabilitiesInitialized(false);
+        setElevationCancelled(true);
+    }, [handleResetStateOpening]);
+
+    const handleElevationRefresh = useCallback(async () => {
+        const result = await getUserSessionElevation();
+        setElevation(result);
+
+        return result;
+    }, []);
+
+    const handleSFDialogOpened = useCallback(() => {
+        setDialogSFOpening(false);
+    }, []);
+
+    const handleIVDialogOpened = useCallback(() => {
+        setDialogIVOpening(false);
+    }, []);
+
+    const handleLoadCapabilities = useCallback(async () => {
+        setCapabilitiesLoading(true);
+        setCapabilitiesError(false);
+        setCapabilitiesInitialized(false);
+        setElevationCancelled(false);
+
+        try {
+            const elevationResult = await getUserSessionElevation();
+            setElevation(elevationResult);
+
+            if (elevationResult && (elevationResult.elevated || elevationResult.skip_second_factor)) {
+                await fetchCapabilities();
+                return;
+            }
+
+            setCapabilitiesLoading(false);
+            setDialogSFOpening(true);
+        } catch (error) {
+            console.error(error);
+            setCapabilitiesLoading(false);
+            setCapabilitiesError(true);
+            setCapabilitiesInitialized(true);
+        }
+    }, [fetchCapabilities]);
+
+    const handleSFDialogClosed = useCallback(
+        (ok: boolean, _changed: boolean) => {
+            if (!ok) {
+                console.warn("Second Factor dialog close callback failed, it was likely cancelled by the user.");
+
+                handleElevationCancelled();
+
+                return;
+            }
+
+            handleElevationRefresh()
+                .then((refreshedElevation) => {
+                    setDialogSFOpening(false);
+
+                    if (refreshedElevation && (refreshedElevation.elevated || refreshedElevation.skip_second_factor)) {
+                        fetchCapabilities().catch(console.error);
+
+                        return;
+                    }
+
+                    setDialogIVOpening(true);
+                })
+                .catch((error) => {
+                    console.error(error);
+                    handleResetState();
+                });
+        },
+        [fetchCapabilities, handleElevationCancelled, handleElevationRefresh, handleResetState],
+    );
+
+    const handleIVDialogClosed = useCallback(
+        (ok: boolean) => {
+            if (!ok) {
+                console.warn(
+                    "Identity Verification dialog close callback failed, it was likely cancelled by the user.",
+                );
+
+                handleElevationCancelled();
+
+                return;
+            }
+
+            setDialogIVOpening(false);
+            setElevation(undefined);
+            fetchCapabilities().catch(console.error);
+        },
+        [fetchCapabilities, handleElevationCancelled],
+    );
 
     const loadUsers = useCallback(async () => {
         setUsersLoading(true);
@@ -240,8 +369,22 @@ const UserManagementView = () => {
     }, [searchQuery]);
 
     useEffect(() => {
-        fetchCapabilities().catch(console.error);
-    }, [fetchCapabilities]);
+        handleLoadCapabilities().catch(console.error);
+    }, [handleLoadCapabilities]);
+
+    useEffect(() => {
+        fetchUserInfo();
+    }, [fetchUserInfo]);
+
+    useEffect(() => {
+        if (fetchUserInfoError) {
+            createErrorNotification(
+                translate("There was an issue retrieving user preferences", {
+                    ns: "portal",
+                }),
+            );
+        }
+    }, [createErrorNotification, fetchUserInfoError, translate]);
 
     useEffect(() => {
         if (!capabilities || !capabilities.supported || !capabilities.can_list) {
@@ -266,7 +409,7 @@ const UserManagementView = () => {
     };
 
     const handleCapabilityRetry = () => {
-        fetchCapabilities().catch(console.error);
+        handleLoadCapabilities().catch(console.error);
     };
 
     const handleOpenCreate = () => {
@@ -484,6 +627,21 @@ const UserManagementView = () => {
 
     return (
         <Fragment>
+            <SecondFactorDialog
+                info={userInfo}
+                elevation={elevation}
+                opening={dialogSFOpening}
+                handleClosed={handleSFDialogClosed}
+                handleOpened={handleSFDialogOpened}
+            />
+
+            <IdentityVerificationDialog
+                elevation={elevation}
+                opening={dialogIVOpening}
+                handleClosed={handleIVDialogClosed}
+                handleOpened={handleIVDialogOpened}
+            />
+
             <UserDialog
                 canNotify={canNotify}
                 loading={createSubmitting}
@@ -604,7 +762,23 @@ const UserManagementView = () => {
                             />
                         ) : null}
 
-                        {!capabilitiesLoading && !capabilitiesError && !isSupported ? (
+                        {!capabilitiesLoading && !capabilitiesError && elevationCancelled ? (
+                            <CenteredState
+                                action={
+                                    <Button onClick={handleCapabilityRetry} startIcon={<Refresh />} variant="contained">
+                                        {translate("Verify")}
+                                    </Button>
+                                }
+                                description={translate(
+                                    "In order to perform this action, policy enforcement requires that two-factor authentication is performed",
+                                )}
+                                title={translate("Verification")}
+                            />
+                        ) : null}
+
+                        {!capabilitiesInitialized ? null : !capabilitiesLoading &&
+                          !capabilitiesError &&
+                          !isSupported ? (
                             <CenteredState
                                 description={translate(
                                     "The configured authentication backend does not support administrative user management",
@@ -613,7 +787,7 @@ const UserManagementView = () => {
                             />
                         ) : null}
 
-                        {!capabilitiesLoading && !capabilitiesError && isSupported ? (
+                        {!capabilitiesInitialized ? null : !capabilitiesLoading && !capabilitiesError && isSupported ? (
                             <Fragment>
                                 {readOnlyNotice ? (
                                     <Alert severity="info">
