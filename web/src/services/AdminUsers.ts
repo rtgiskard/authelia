@@ -1,8 +1,15 @@
 import { AdminUsersPath } from "@services/Api";
-import { Get, PatchWithOptionalResponse, PostWithOptionalResponse, PutWithOptionalResponse } from "@services/Client";
+import {
+    DeleteWithOptionalResponse,
+    Get,
+    PatchWithOptionalResponse,
+    PostWithOptionalResponse,
+    PutWithOptionalResponse,
+} from "@services/Client";
 
 export interface AdminUserManagementCapabilities {
     can_create: boolean;
+    can_delete: boolean;
     can_list: boolean;
     can_notify: boolean;
     can_reset_password: boolean;
@@ -42,14 +49,16 @@ interface AdminUserListResponse {
     users: AdminUser[];
 }
 
-interface AdminCreateUserResponseBody {
+interface AdminNotificationResponseBody {
     notification_error?: string;
     notification_reason?: string;
     notification_sent: boolean;
 }
 
 export interface AdminPasswordResetPayload {
-    password: string;
+    generate_password?: boolean;
+    notify?: boolean;
+    password?: string;
 }
 
 export interface AdminUpdateUserPayload {
@@ -63,14 +72,15 @@ export interface AdminCreateUserPayload {
     disabled: boolean;
     display_name: string;
     email: string;
+    generate_password?: boolean;
     groups: string[];
     notify: boolean;
-    password: string;
+    password?: string;
     username: string;
 }
 
 export function createAdminUser(payload: AdminCreateUserPayload) {
-    return PostWithOptionalResponse<AdminCreateUserResponseBody>(AdminUsersPath, payload).then(
+    return PostWithOptionalResponse<AdminNotificationResponseBody>(AdminUsersPath, payload).then(
         toAdminCreateUserResponse,
     );
 }
@@ -79,12 +89,14 @@ export function getAdminUserManagementCapabilities(signal?: AbortSignal) {
     return Get<AdminUserManagementCapabilitiesResponse>(`${AdminUsersPath}/capabilities`, signal).then(
         (capabilities) => ({
             can_create: capabilities.create,
+            can_delete: capabilities.delete,
             can_list: capabilities.list,
             can_notify: capabilities.create,
             can_reset_password: capabilities.reset_password,
             can_update: capabilities.update,
             supported:
                 capabilities.create ||
+                capabilities.delete ||
                 capabilities.list ||
                 capabilities.read ||
                 capabilities.update ||
@@ -109,16 +121,24 @@ export function getAdminUser(username: string, signal?: AbortSignal) {
     return Get<AdminUser>(`${AdminUsersPath}/${encodeURIComponent(username)}`, signal);
 }
 
+export function deleteAdminUser(username: string, signal?: AbortSignal) {
+    return DeleteWithOptionalResponse(`${AdminUsersPath}/${encodeURIComponent(username)}`, undefined, signal);
+}
+
 export function updateAdminUser(username: string, payload: AdminUpdateUserPayload, signal?: AbortSignal) {
     return PatchWithOptionalResponse<AdminUser>(`${AdminUsersPath}/${encodeURIComponent(username)}`, payload, signal);
 }
 
 export function resetAdminUserPassword(username: string, payload: AdminPasswordResetPayload, signal?: AbortSignal) {
-    return PutWithOptionalResponse(`${AdminUsersPath}/${encodeURIComponent(username)}/password`, payload, signal);
+    return PutWithOptionalResponse<AdminNotificationResponseBody>(
+        `${AdminUsersPath}/${encodeURIComponent(username)}/password`,
+        payload,
+        signal,
+    ).then(toAdminCreateUserResponse);
 }
 
 function toAdminCreateUserResponse(
-    response: AdminCreateUserResponseBody | undefined,
+    response: AdminNotificationResponseBody | undefined,
 ): AdminCreateUserResponse | undefined {
     if (!response) {
         return undefined;
@@ -130,7 +150,10 @@ function toAdminCreateUserResponse(
 
     if (response.notification_error) {
         return {
-            notification: { message: "User saved but email notification could not be sent", status: "failed" },
+            notification: {
+                message: "User saved but email notification could not be sent",
+                status: "failed",
+            },
         };
     }
 

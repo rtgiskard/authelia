@@ -1,5 +1,6 @@
 import {
     createAdminUser,
+    deleteAdminUser,
     getAdminUser,
     getAdminUserManagementCapabilities,
     listAdminUsers,
@@ -7,13 +8,20 @@ import {
     updateAdminUser,
 } from "@services/AdminUsers";
 import { AdminUsersPath } from "@services/Api";
-import { Get, PatchWithOptionalResponse, PostWithOptionalResponse, PutWithOptionalResponse } from "@services/Client";
+import {
+    DeleteWithOptionalResponse,
+    Get,
+    PatchWithOptionalResponse,
+    PostWithOptionalResponse,
+    PutWithOptionalResponse,
+} from "@services/Client";
 
 vi.mock("@services/Api", () => ({
     AdminUsersPath: "/admin/users",
 }));
 
 vi.mock("@services/Client", () => ({
+    DeleteWithOptionalResponse: vi.fn(),
     Get: vi.fn(),
     PatchWithOptionalResponse: vi.fn(),
     PostWithOptionalResponse: vi.fn(),
@@ -38,6 +46,28 @@ it("calls PostWithOptionalResponse with the admin create user payload", async ()
     expect(PostWithOptionalResponse).toHaveBeenCalledWith(AdminUsersPath, payload);
 });
 
+it("calls PostWithOptionalResponse with a generated-password create payload", async () => {
+    const payload = {
+        disabled: false,
+        display_name: "Generated User",
+        email: "generated@example.com",
+        generate_password: true,
+        groups: [],
+        notify: true,
+        username: "generated",
+    };
+
+    vi.mocked(PostWithOptionalResponse).mockResolvedValue({
+        notification_sent: true,
+    });
+
+    await expect(createAdminUser(payload)).resolves.toEqual({
+        notification: { status: "sent" },
+    });
+
+    expect(PostWithOptionalResponse).toHaveBeenCalledWith(AdminUsersPath, payload);
+});
+
 it("gets user management capabilities", async () => {
     vi.mocked(Get).mockResolvedValue({
         create: true,
@@ -53,6 +83,27 @@ it("gets user management capabilities", async () => {
     expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}/capabilities`, undefined);
 });
 
+it("maps user management capabilities", async () => {
+    vi.mocked(Get).mockResolvedValue({
+        create: true,
+        delete: true,
+        list: true,
+        read: true,
+        reset_password: true,
+        update: true,
+    });
+
+    await expect(getAdminUserManagementCapabilities()).resolves.toEqual({
+        can_create: true,
+        can_delete: true,
+        can_list: true,
+        can_notify: true,
+        can_reset_password: true,
+        can_update: true,
+        supported: true,
+    });
+});
+
 it("treats reset-password-only capabilities as supported", async () => {
     vi.mocked(Get).mockResolvedValue({
         create: false,
@@ -65,9 +116,31 @@ it("treats reset-password-only capabilities as supported", async () => {
 
     await expect(getAdminUserManagementCapabilities()).resolves.toEqual({
         can_create: false,
+        can_delete: false,
         can_list: false,
         can_notify: false,
         can_reset_password: true,
+        can_update: false,
+        supported: true,
+    });
+});
+
+it("treats delete-only capabilities as supported", async () => {
+    vi.mocked(Get).mockResolvedValue({
+        create: false,
+        delete: true,
+        list: false,
+        read: false,
+        reset_password: false,
+        update: false,
+    });
+
+    await expect(getAdminUserManagementCapabilities()).resolves.toEqual({
+        can_create: false,
+        can_delete: true,
+        can_list: false,
+        can_notify: false,
+        can_reset_password: false,
         can_update: false,
         supported: true,
     });
@@ -121,6 +194,16 @@ it("gets user detail", async () => {
     expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, undefined);
 });
 
+it("deletes a user", async () => {
+    const signal = new AbortController().signal;
+
+    vi.mocked(DeleteWithOptionalResponse).mockResolvedValue(undefined);
+
+    await deleteAdminUser("john/doe", signal);
+
+    expect(DeleteWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, undefined, signal);
+});
+
 it("updates a user", async () => {
     const payload = {
         disabled: true,
@@ -146,4 +229,40 @@ it("resets a user password", async () => {
     await resetAdminUserPassword("john/doe", payload);
 
     expect(PutWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe/password`, payload, undefined);
+});
+
+it("resets a user password with generated password notification", async () => {
+    const payload = {
+        generate_password: true,
+        notify: true,
+    };
+
+    vi.mocked(PutWithOptionalResponse).mockResolvedValue({
+        notification_sent: true,
+    });
+
+    await expect(resetAdminUserPassword("john/doe", payload)).resolves.toEqual({
+        notification: { status: "sent" },
+    });
+
+    expect(PutWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe/password`, payload, undefined);
+});
+
+it("maps password reset notification failures without exposing raw errors", async () => {
+    const payload = {
+        generate_password: true,
+        notify: true,
+    };
+
+    vi.mocked(PutWithOptionalResponse).mockResolvedValue({
+        notification_error: "smtp secret leaked",
+        notification_sent: false,
+    });
+
+    await expect(resetAdminUserPassword("john/doe", payload)).resolves.toEqual({
+        notification: {
+            message: "User saved but email notification could not be sent",
+            status: "failed",
+        },
+    });
 });

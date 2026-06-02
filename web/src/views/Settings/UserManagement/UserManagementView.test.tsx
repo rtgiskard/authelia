@@ -1,9 +1,18 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { SecondFactorMethod } from "@models/Methods";
+import { PasswordPolicyMode } from "@models/PasswordPolicy";
 import type { UserInfo } from "@models/UserInfo";
-import { createAdminUser, getAdminUserManagementCapabilities, listAdminUsers } from "@services/AdminUsers";
-import { getUserSessionElevation } from "@services/UserSessionElevation";
+import {
+    createAdminUser,
+    deleteAdminUser,
+    getAdminUser,
+    getAdminUserManagementCapabilities,
+    listAdminUsers,
+    resetAdminUserPassword,
+} from "@services/AdminUsers";
+import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
+import { type UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
 import UserManagementView from "@views/Settings/UserManagement/UserManagementView";
 
 const mockCreateErrorNotification = vi.fn();
@@ -67,11 +76,16 @@ vi.mock("@hooks/UserInfo", () => ({
 
 vi.mock("@services/AdminUsers", () => ({
     createAdminUser: vi.fn(),
+    deleteAdminUser: vi.fn(),
     getAdminUser: vi.fn(),
     getAdminUserManagementCapabilities: vi.fn(),
     listAdminUsers: vi.fn(),
     resetAdminUserPassword: vi.fn(),
     updateAdminUser: vi.fn(),
+}));
+
+vi.mock("@services/PasswordPolicyConfiguration", () => ({
+    getPasswordPolicyConfiguration: vi.fn(),
 }));
 
 vi.mock("@services/UserSessionElevation", () => ({
@@ -122,9 +136,13 @@ beforeEach(() => {
         null,
     ]);
     vi.mocked(createAdminUser).mockReset();
+    vi.mocked(deleteAdminUser).mockReset();
+    vi.mocked(getAdminUser).mockReset();
     vi.mocked(getAdminUserManagementCapabilities).mockReset();
+    vi.mocked(getPasswordPolicyConfiguration).mockReset();
     vi.mocked(getUserSessionElevation).mockReset();
     vi.mocked(listAdminUsers).mockReset();
+    vi.mocked(resetAdminUserPassword).mockReset();
     vi.mocked(getUserSessionElevation).mockResolvedValue({
         can_skip_second_factor: false,
         elevated: true,
@@ -135,6 +153,7 @@ beforeEach(() => {
     });
     vi.mocked(getAdminUserManagementCapabilities).mockResolvedValue({
         can_create: true,
+        can_delete: false,
         can_list: true,
         can_notify: true,
         can_reset_password: true,
@@ -142,6 +161,25 @@ beforeEach(() => {
         supported: true,
     });
     vi.mocked(listAdminUsers).mockResolvedValue([]);
+    vi.mocked(deleteAdminUser).mockResolvedValue(undefined);
+    vi.mocked(getAdminUser).mockResolvedValue({
+        disabled: false,
+        display_name: "Alice Admin",
+        email: "alice@example.com",
+        groups: ["admins"],
+        username: "alice",
+    });
+    vi.mocked(getPasswordPolicyConfiguration).mockResolvedValue({
+        max_length: 0,
+        min_length: 8,
+        min_score: 0,
+        mode: PasswordPolicyMode.Disabled,
+        require_lowercase: false,
+        require_number: false,
+        require_special: false,
+        require_uppercase: false,
+    });
+    vi.mocked(resetAdminUserPassword).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -151,6 +189,7 @@ afterEach(() => {
 it("shows an unsupported state when the backend does not support user management", async () => {
     vi.mocked(getAdminUserManagementCapabilities).mockResolvedValue({
         can_create: false,
+        can_delete: false,
         can_list: false,
         can_notify: false,
         can_reset_password: false,
@@ -169,6 +208,7 @@ it("shows an unsupported state when the backend does not support user management
 it("shows listing unavailable instead of unsupported when only password reset is available", async () => {
     vi.mocked(getAdminUserManagementCapabilities).mockResolvedValue({
         can_create: false,
+        can_delete: false,
         can_list: false,
         can_notify: false,
         can_reset_password: true,
@@ -225,7 +265,7 @@ it("creates a user with notify enabled when email is provided", async () => {
     fireEvent.change(within(dialog).getByLabelText("Display Name *"), {
         target: { value: "New User" },
     });
-    fireEvent.change(within(dialog).getByLabelText("Email"), {
+    fireEvent.change(within(dialog).getByLabelText("Email *"), {
         target: { value: "new-user@example.com" },
     });
     fireEvent.change(within(dialog).getByLabelText("Password *"), {
@@ -247,6 +287,76 @@ it("creates a user with notify enabled when email is provided", async () => {
     });
 
     expect(mockCreateSuccessNotification).toHaveBeenCalledWith("User created successfully");
+});
+
+it("requires an email address when creating a user", async () => {
+    render(<UserManagementView />);
+
+    await waitFor(() => {
+        expect(listAdminUsers).toHaveBeenCalledWith("");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create User" }));
+
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 3000 });
+
+    fireEvent.change(within(dialog).getByLabelText("Username *"), {
+        target: { value: "new-user" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Display Name *"), {
+        target: { value: "New User" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Password *"), {
+        target: { value: "password123" },
+    });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create User" }));
+
+    expect(mockCreateErrorNotification).toHaveBeenCalledWith("Email is required");
+    expect(createAdminUser).not.toHaveBeenCalled();
+});
+
+it("creates a user with a generated password notification payload", async () => {
+    vi.mocked(createAdminUser).mockResolvedValue({
+        notification: { status: "sent" },
+    });
+
+    render(<UserManagementView />);
+
+    await waitFor(() => {
+        expect(listAdminUsers).toHaveBeenCalledWith("");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create User" }));
+
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 3000 });
+
+    fireEvent.change(within(dialog).getByLabelText("Username *"), {
+        target: { value: "generated-user" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Display Name *"), {
+        target: { value: "Generated User" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Email *"), {
+        target: { value: "generated@example.com" },
+    });
+    fireEvent.click(within(dialog).getByLabelText("Generate random password and email it to the user"));
+
+    expect(within(dialog).queryByLabelText("Password *")).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create User" }));
+
+    await waitFor(() => {
+        expect(createAdminUser).toHaveBeenCalledWith({
+            disabled: false,
+            display_name: "Generated User",
+            email: "generated@example.com",
+            generate_password: true,
+            groups: [],
+            notify: true,
+            username: "generated-user",
+        });
+    });
 });
 
 it("shows verification without opening elevation dialogs when elevation is required on initial render", async () => {
@@ -439,4 +549,210 @@ it("retries capability loading through the elevation preflight", async () => {
     await screen.findByTestId("second-factor-dialog", {}, { timeout: 3000 });
     expect(getAdminUserManagementCapabilities).not.toHaveBeenCalled();
     expect(screen.queryByText("Unable to Load User Management")).not.toBeInTheDocument();
+});
+
+it("hides delete actions and uses clearer sign-in labels when delete is unavailable", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+
+    expect(screen.getByRole("button", { name: "Block Sign-In alice" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Disable User alice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete User alice" })).not.toBeInTheDocument();
+});
+
+it("uses client-side pagination for listed users", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue(
+        Array.from({ length: 6 }, (_value, index) => ({
+            disabled: false,
+            display_name: `User ${index + 1}`,
+            email: `user-${index + 1}@example.com`,
+            groups: [],
+            username: `user-${index + 1}`,
+        })),
+    );
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByText("user-1", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("user-5")).toBeInTheDocument();
+    expect(screen.queryByText("user-6")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Go to next page"));
+
+    expect(await screen.findByText("user-6", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("user-1")).not.toBeInTheDocument();
+});
+
+it("resets a user password with a generated password notification payload", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Password alice" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Reset Password" }, { timeout: 3000 });
+
+    fireEvent.click(within(dialog).getByLabelText("Generate random password and email it to the user"));
+    expect(within(dialog).queryByLabelText("New Password *")).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reset Password" }));
+
+    await waitFor(() => {
+        expect(resetAdminUserPassword).toHaveBeenCalledWith("alice", {
+            generate_password: true,
+            notify: true,
+        });
+    });
+});
+
+it("shows password-policy feedback for weak password reset failures", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+    vi.mocked(resetAdminUserPassword).mockRejectedValue({
+        isAxiosError: true,
+        response: { status: 400 },
+    });
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Password alice" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Reset Password" }, { timeout: 3000 });
+    const passwordField = within(dialog).getByLabelText("New Password *");
+
+    fireEvent.change(passwordField, {
+        target: { value: "weak" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reset Password" }));
+
+    await waitFor(() => {
+        expect(mockCreateErrorNotification).toHaveBeenCalledWith(
+            "Your supplied password does not meet the password policy requirements",
+        );
+    });
+    expect(passwordField).toHaveAttribute("aria-invalid", "true");
+});
+
+it("shows delete action when supported and deletes after confirmation", async () => {
+    vi.mocked(getAdminUserManagementCapabilities).mockResolvedValue({
+        can_create: true,
+        can_delete: true,
+        can_list: true,
+        can_notify: true,
+        can_reset_password: true,
+        can_update: true,
+        supported: true,
+    });
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete User alice" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete {{username}}" }, { timeout: 3000 });
+
+    expect(
+        within(dialog).getByText(
+            "This permanently deletes the user from the configured authentication backend and cannot be undone",
+        ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete User" }));
+
+    await waitFor(() => {
+        expect(deleteAdminUser).toHaveBeenCalledWith("alice");
+    });
+    expect(mockCreateSuccessNotification).toHaveBeenCalledWith("User deleted successfully");
+    await waitFor(() => {
+        expect(listAdminUsers).toHaveBeenCalledTimes(2);
+    });
+});
+
+it("keeps a visible state between second-factor success and identity verification", async () => {
+    let resolveRefresh: (value: UserSessionElevation) => void = () => {};
+    const pendingRefresh = new Promise<UserSessionElevation>((resolve) => {
+        resolveRefresh = resolve;
+    });
+
+    vi.mocked(getUserSessionElevation)
+        .mockResolvedValueOnce({
+            can_skip_second_factor: false,
+            elevated: false,
+            expires: 0,
+            factor_knowledge: false,
+            require_second_factor: true,
+            skip_second_factor: false,
+        })
+        .mockResolvedValueOnce({
+            can_skip_second_factor: false,
+            elevated: false,
+            expires: 0,
+            factor_knowledge: false,
+            require_second_factor: true,
+            skip_second_factor: false,
+        })
+        .mockReturnValueOnce(pendingRefresh);
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByText("Verification", {}, { timeout: 3000 })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await screen.findByTestId("second-factor-dialog", {}, { timeout: 3000 });
+
+    fireEvent.click(screen.getByRole("button", { name: "sf-success" }));
+
+    expect(await screen.findByText("Loading User Management", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("Checking which user management features are available")).toBeInTheDocument();
+
+    resolveRefresh({
+        can_skip_second_factor: false,
+        elevated: false,
+        expires: 0,
+        factor_knowledge: false,
+        require_second_factor: true,
+        skip_second_factor: false,
+    });
+
+    await screen.findByTestId("identity-dialog", {}, { timeout: 3000 });
 });

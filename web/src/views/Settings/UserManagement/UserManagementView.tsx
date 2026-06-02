@@ -1,6 +1,15 @@
-import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+    type ChangeEvent,
+    type FormEvent,
+    Fragment,
+    type ReactNode,
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
 
-import { Add, Edit, LockReset, Person, PersonOff, Refresh, Search } from "@mui/icons-material";
+import { Add, Delete, Edit, LockReset, Person, PersonOff, Refresh, Search } from "@mui/icons-material";
 import {
     Alert,
     Box,
@@ -27,6 +36,7 @@ import {
     TableCell,
     TableContainer,
     TableHead,
+    TablePagination,
     TableRow,
     TextField,
     Tooltip,
@@ -34,10 +44,13 @@ import {
     useMediaQuery,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
+import axios from "axios";
 import { useTranslation } from "react-i18next";
 
+import PasswordMeter from "@components/PasswordMeter";
 import { useNotifications } from "@contexts/NotificationsContext";
 import { useUserInfoGET } from "@hooks/UserInfo";
+import { type PasswordPolicyConfiguration, PasswordPolicyMode } from "@models/PasswordPolicy";
 import {
     type AdminCreateUserNotificationStatus,
     type AdminCreateUserPayload,
@@ -47,12 +60,14 @@ import {
     type AdminUser,
     type AdminUserManagementCapabilities,
     createAdminUser,
+    deleteAdminUser,
     getAdminUser,
     getAdminUserManagementCapabilities,
     listAdminUsers,
     resetAdminUserPassword,
     updateAdminUser,
 } from "@services/AdminUsers";
+import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
 import { type UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
 import IdentityVerificationDialog from "@views/Settings/Common/IdentityVerificationDialog";
 import SecondFactorDialog from "@views/Settings/Common/SecondFactorDialog";
@@ -61,6 +76,7 @@ interface UserFormValues {
     disabled: boolean;
     displayName: string;
     email: string;
+    generatePassword: boolean;
     groups: string;
     notify: boolean;
     password: string;
@@ -68,7 +84,18 @@ interface UserFormValues {
 }
 
 interface PasswordResetFormValues {
+    generatePassword: boolean;
     password: string;
+}
+
+interface PasswordResetUserDetails {
+    displayName: string;
+    email: string;
+}
+
+interface FieldErrors {
+    email: boolean;
+    password: boolean;
 }
 
 interface ConfirmDialogProps {
@@ -83,10 +110,12 @@ interface ConfirmDialogProps {
 
 interface UserDialogProps {
     canNotify: boolean;
+    errors: FieldErrors;
     loading: boolean;
     onClose: () => void;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
     open: boolean;
+    passwordPolicy: PasswordPolicyConfiguration;
     readOnlyUsername?: boolean;
     showPassword: boolean;
     submitLabel: string;
@@ -97,10 +126,14 @@ interface UserDialogProps {
 }
 
 interface PasswordResetDialogProps {
+    canNotify: boolean;
+    errors: Pick<FieldErrors, "password">;
     loading: boolean;
     onClose: () => void;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
     open: boolean;
+    passwordPolicy: PasswordPolicyConfiguration;
+    selectedUser: PasswordResetUserDetails;
     title: string;
     values: PasswordResetFormValues;
     setValues: (updater: (previous: PasswordResetFormValues) => PasswordResetFormValues) => void;
@@ -110,6 +143,7 @@ const defaultCreateValues: UserFormValues = {
     disabled: false,
     displayName: "",
     email: "",
+    generatePassword: false,
     groups: "",
     notify: true,
     password: "",
@@ -120,6 +154,7 @@ const defaultEditValues: UserFormValues = {
     disabled: false,
     displayName: "",
     email: "",
+    generatePassword: false,
     groups: "",
     notify: true,
     password: "",
@@ -127,8 +162,32 @@ const defaultEditValues: UserFormValues = {
 };
 
 const defaultPasswordResetValues: PasswordResetFormValues = {
+    generatePassword: false,
     password: "",
 };
+
+const defaultPasswordResetUserDetails: PasswordResetUserDetails = {
+    displayName: "",
+    email: "",
+};
+
+const defaultFieldErrors: FieldErrors = {
+    email: false,
+    password: false,
+};
+
+const defaultPasswordPolicy: PasswordPolicyConfiguration = {
+    max_length: 0,
+    min_length: 8,
+    min_score: 0,
+    mode: PasswordPolicyMode.Disabled,
+    require_lowercase: false,
+    require_number: false,
+    require_special: false,
+    require_uppercase: false,
+};
+
+const rowsPerPageOptions = [5, 10, 25];
 
 const toGroupsArray = (value: string) =>
     value
@@ -138,15 +197,24 @@ const toGroupsArray = (value: string) =>
 
 const toGroupsValue = (groups: string[]) => groups.join(", ");
 
-const toCreatePayload = (values: UserFormValues): AdminCreateUserPayload => ({
-    disabled: values.disabled,
-    display_name: values.displayName.trim(),
-    email: values.email.trim(),
-    groups: toGroupsArray(values.groups),
-    notify: values.notify,
-    password: values.password,
-    username: values.username.trim(),
-});
+const toCreatePayload = (values: UserFormValues): AdminCreateUserPayload => {
+    const payload: AdminCreateUserPayload = {
+        disabled: values.disabled,
+        display_name: values.displayName.trim(),
+        email: values.email.trim(),
+        groups: toGroupsArray(values.groups),
+        notify: values.generatePassword ? true : values.notify,
+        username: values.username.trim(),
+    };
+
+    if (values.generatePassword) {
+        payload.generate_password = true;
+    } else {
+        payload.password = values.password;
+    }
+
+    return payload;
+};
 
 const toUpdatePayload = (values: UserFormValues): AdminUpdateUserPayload => ({
     disabled: values.disabled,
@@ -155,9 +223,15 @@ const toUpdatePayload = (values: UserFormValues): AdminUpdateUserPayload => ({
     groups: toGroupsArray(values.groups),
 });
 
-const toPasswordResetPayload = (values: PasswordResetFormValues): AdminPasswordResetPayload => ({
-    password: values.password,
-});
+const toPasswordResetPayload = (values: PasswordResetFormValues): AdminPasswordResetPayload =>
+    values.generatePassword
+        ? {
+              generate_password: true,
+              notify: true,
+          }
+        : {
+              password: values.password,
+          };
 
 const isElevationSatisfied = (elevation?: UserSessionElevation) =>
     elevation ? elevation.elevated || elevation.skip_second_factor : false;
@@ -166,6 +240,7 @@ const fromUser = (user: AdminUser): UserFormValues => ({
     disabled: user.disabled,
     displayName: user.display_name,
     email: user.email,
+    generatePassword: false,
     groups: toGroupsValue(user.groups),
     notify: user.email.trim() !== "",
     password: "",
@@ -197,6 +272,7 @@ const UserManagementView = () => {
     const [createOpen, setCreateOpen] = useState(false);
     const [createSubmitting, setCreateSubmitting] = useState(false);
     const [createValues, setCreateValues] = useState<UserFormValues>(defaultCreateValues);
+    const [createErrors, setCreateErrors] = useState<FieldErrors>(defaultFieldErrors);
 
     const [editOpen, setEditOpen] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
@@ -208,20 +284,39 @@ const UserManagementView = () => {
     const [passwordResetLoading, setPasswordResetLoading] = useState(false);
     const [passwordResetSubmitting, setPasswordResetSubmitting] = useState(false);
     const [passwordResetUsername, setPasswordResetUsername] = useState("");
+    const [passwordResetUserDetails, setPasswordResetUserDetails] = useState<PasswordResetUserDetails>(
+        defaultPasswordResetUserDetails,
+    );
     const [passwordResetValues, setPasswordResetValues] = useState<PasswordResetFormValues>(defaultPasswordResetValues);
+    const [passwordResetErrors, setPasswordResetErrors] = useState<Pick<FieldErrors, "password">>({ password: false });
 
     const [toggleUsername, setToggleUsername] = useState("");
     const [toggleNextDisabled, setToggleNextDisabled] = useState(false);
     const [toggleConfirmOpen, setToggleConfirmOpen] = useState(false);
     const [toggleSubmitting, setToggleSubmitting] = useState(false);
 
+    const [deleteUsername, setDeleteUsername] = useState("");
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+    const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicyConfiguration>(defaultPasswordPolicy);
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
+
     const isSupported = capabilities?.supported ?? false;
     const canList = capabilities?.can_list ?? false;
     const canCreate = capabilities?.can_create ?? false;
+    const canDelete = capabilities?.can_delete ?? false;
     const canUpdate = capabilities?.can_update ?? false;
     const canResetPassword = capabilities?.can_reset_password ?? false;
     const canNotify = capabilities?.can_notify ?? false;
-    const hasMutatingCapabilities = canCreate || canUpdate || canResetPassword;
+    const hasMutatingCapabilities = canCreate || canDelete || canUpdate || canResetPassword;
+    const verificationOpening =
+        !capabilitiesInitialized && !capabilitiesLoading && !capabilitiesError && !elevationCancelled;
+    const pagedUsers = useMemo(
+        () => users.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+        [page, rowsPerPage, users],
+    );
 
     const fetchCapabilities = useCallback(async () => {
         setCapabilitiesLoading(true);
@@ -342,6 +437,8 @@ const UserManagementView = () => {
                 return;
             }
 
+            setCapabilitiesLoading(true);
+
             handleElevationRefresh()
                 .then((refreshedElevation) => {
                     setDialogSFOpening(false);
@@ -352,6 +449,7 @@ const UserManagementView = () => {
                         return;
                     }
 
+                    setCapabilitiesLoading(false);
                     setDialogIVOpening(true);
                 })
                 .catch((error) => {
@@ -388,6 +486,7 @@ const UserManagementView = () => {
         try {
             const result = await listAdminUsers(searchQuery);
             setUsers(result);
+            setPage(0);
         } catch (error) {
             console.error(error);
             setUsersError(true);
@@ -399,6 +498,15 @@ const UserManagementView = () => {
     useEffect(() => {
         handleLoadCapabilities().catch(console.error);
     }, [handleLoadCapabilities]);
+
+    useEffect(() => {
+        getPasswordPolicyConfiguration()
+            .then(setPasswordPolicy)
+            .catch((error) => {
+                console.error(error);
+                createErrorNotification(translate("There was an issue retrieving configuration"));
+            });
+    }, [createErrorNotification, translate]);
 
     useEffect(() => {
         fetchUserInfo();
@@ -433,7 +541,22 @@ const UserManagementView = () => {
             return;
         }
 
+        setPage(0);
         loadUsers().catch(console.error);
+    };
+
+    const handleSearchChange = (value: string) => {
+        setSearchQuery(value);
+        setPage(0);
+    };
+
+    const handleChangePage = (_event: unknown, nextPage: number) => {
+        setPage(nextPage);
+    };
+
+    const handleChangeRowsPerPage = (event: ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(Number.parseInt(event.target.value, 10));
+        setPage(0);
     };
 
     const handleCapabilityRetry = () => {
@@ -442,6 +565,7 @@ const UserManagementView = () => {
 
     const handleOpenCreate = () => {
         setCreateValues(defaultCreateValues);
+        setCreateErrors(defaultFieldErrors);
         setCreateOpen(true);
     };
 
@@ -452,15 +576,28 @@ const UserManagementView = () => {
 
         setCreateOpen(false);
         setCreateValues(defaultCreateValues);
+        setCreateErrors(defaultFieldErrors);
     };
+
+    const isWeakPasswordError = (error: unknown) => axios.isAxiosError(error) && error.response?.status === 400;
 
     const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
         const payload = toCreatePayload(createValues);
+        const nextErrors = {
+            email: payload.email === "",
+            password: !payload.generate_password && (payload.password ?? "") === "",
+        };
 
-        if (payload.username === "" || payload.display_name === "" || payload.password === "") {
-            createErrorNotification(translate("Username, display name, and password are required"));
+        setCreateErrors(nextErrors);
+
+        if (payload.username === "" || payload.display_name === "" || nextErrors.email || nextErrors.password) {
+            createErrorNotification(
+                nextErrors.email
+                    ? translate("Email is required")
+                    : translate("Username, display name, and password are required"),
+            );
 
             return;
         }
@@ -474,10 +611,18 @@ const UserManagementView = () => {
             handleNotificationFeedback(response, payload.email, payload.notify);
             setCreateOpen(false);
             setCreateValues(defaultCreateValues);
+            setCreateErrors(defaultFieldErrors);
             handleRefresh();
         } catch (error) {
             console.error(error);
-            createErrorNotification(translate("There was an issue creating the user"));
+            if (!payload.generate_password && isWeakPasswordError(error)) {
+                setCreateErrors((previous) => ({ ...previous, password: true }));
+                createErrorNotification(
+                    translate("Your supplied password does not meet the password policy requirements"),
+                );
+            } else {
+                createErrorNotification(translate("There was an issue creating the user"));
+            }
         } finally {
             setCreateSubmitting(false);
         }
@@ -545,10 +690,15 @@ const UserManagementView = () => {
         setPasswordResetUsername(username);
         setPasswordResetOpen(true);
         setPasswordResetLoading(true);
+        setPasswordResetErrors({ password: false });
 
         try {
-            await getAdminUser(username);
-            setPasswordResetValues({ password: "" });
+            const user = await getAdminUser(username);
+            setPasswordResetUserDetails({
+                displayName: user.display_name,
+                email: user.email,
+            });
+            setPasswordResetValues(defaultPasswordResetValues);
         } catch (error) {
             console.error(error);
             createErrorNotification(
@@ -571,15 +721,26 @@ const UserManagementView = () => {
         setPasswordResetLoading(false);
         setPasswordResetSubmitting(false);
         setPasswordResetUsername("");
+        setPasswordResetUserDetails(defaultPasswordResetUserDetails);
         setPasswordResetValues(defaultPasswordResetValues);
+        setPasswordResetErrors({ password: false });
     };
 
     const handlePasswordReset = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
         const payload = toPasswordResetPayload(passwordResetValues);
+        const passwordMissing = !payload.generate_password && (payload.password ?? "") === "";
 
-        if (payload.password === "") {
+        setPasswordResetErrors({ password: passwordMissing });
+
+        if (payload.generate_password && (!canNotify || passwordResetUserDetails.email.trim() === "")) {
+            createErrorNotification(translate("Email notification is unavailable for this user"));
+
+            return;
+        }
+
+        if (passwordMissing) {
             createErrorNotification(translate("Password is required"));
 
             return;
@@ -588,12 +749,20 @@ const UserManagementView = () => {
         setPasswordResetSubmitting(true);
 
         try {
-            await resetAdminUserPassword(passwordResetUsername, payload);
+            const response = await resetAdminUserPassword(passwordResetUsername, payload);
             createSuccessNotification(translate("Password reset successfully"));
+            handleNotificationFeedback(response, passwordResetUserDetails.email, payload.notify ?? false);
             handleClosePasswordReset();
         } catch (error) {
             console.error(error);
-            createErrorNotification(translate("There was an issue resetting the password"));
+            if (!payload.generate_password && isWeakPasswordError(error)) {
+                setPasswordResetErrors({ password: true });
+                createErrorNotification(
+                    translate("Your supplied password does not meet the password policy requirements"),
+                );
+            } else {
+                createErrorNotification(translate("There was an issue resetting the password"));
+            }
         } finally {
             setPasswordResetSubmitting(false);
         }
@@ -649,9 +818,40 @@ const UserManagementView = () => {
         }
     };
 
+    const openDeleteDialog = (user: AdminUser) => {
+        setDeleteUsername(user.username);
+        setDeleteConfirmOpen(true);
+    };
+
+    const handleCloseDeleteDialog = () => {
+        if (deleteSubmitting) {
+            return;
+        }
+
+        setDeleteConfirmOpen(false);
+        setDeleteUsername("");
+    };
+
+    const handleDeleteUser = async () => {
+        setDeleteSubmitting(true);
+
+        try {
+            await deleteAdminUser(deleteUsername);
+            createSuccessNotification(translate("User deleted successfully"));
+            setDeleteConfirmOpen(false);
+            setDeleteUsername("");
+            handleRefresh();
+        } catch (error) {
+            console.error(error);
+            createErrorNotification(translate("There was an issue deleting the user"));
+        } finally {
+            setDeleteSubmitting(false);
+        }
+    };
+
     const readOnlyNotice = isSupported && canList && !hasMutatingCapabilities;
 
-    const currentToggleAction = toggleNextDisabled ? translate("Disable User") : translate("Enable User");
+    const currentToggleAction = toggleNextDisabled ? translate("Block Sign-In") : translate("Allow Sign-In");
 
     return (
         <Fragment>
@@ -672,10 +872,12 @@ const UserManagementView = () => {
 
             <UserDialog
                 canNotify={canNotify}
+                errors={createErrors}
                 loading={createSubmitting}
                 onClose={handleCloseCreate}
                 onSubmit={handleCreate}
                 open={createOpen}
+                passwordPolicy={passwordPolicy}
                 showPassword={true}
                 submitLabel={translate("Create User")}
                 subtitle={translate("Create a user in the configured authentication backend")}
@@ -686,10 +888,12 @@ const UserManagementView = () => {
 
             <UserDialog
                 canNotify={canNotify}
+                errors={defaultFieldErrors}
                 loading={editLoading || editSubmitting}
                 onClose={handleCloseEdit}
                 onSubmit={handleEdit}
                 open={editOpen}
+                passwordPolicy={passwordPolicy}
                 readOnlyUsername={true}
                 showPassword={false}
                 submitLabel={translate("Save Changes")}
@@ -700,10 +904,14 @@ const UserManagementView = () => {
             />
 
             <PasswordResetDialog
+                canNotify={canNotify}
+                errors={passwordResetErrors}
                 loading={passwordResetLoading || passwordResetSubmitting}
                 onClose={handleClosePasswordReset}
                 onSubmit={handlePasswordReset}
                 open={passwordResetOpen}
+                passwordPolicy={passwordPolicy}
+                selectedUser={passwordResetUserDetails}
                 title={translate("Reset Password")}
                 values={passwordResetValues}
                 setValues={setPasswordResetValues}
@@ -726,6 +934,20 @@ const UserManagementView = () => {
                 })}
             />
 
+            <ConfirmDialog
+                actionLabel={translate("Delete User")}
+                description={translate(
+                    "This permanently deletes the user from the configured authentication backend and cannot be undone",
+                )}
+                loading={deleteSubmitting}
+                onClose={handleCloseDeleteDialog}
+                onConfirm={handleDeleteUser}
+                open={deleteConfirmOpen}
+                title={translate("Delete {{username}}", {
+                    username: deleteUsername,
+                })}
+            />
+
             <Container
                 sx={{
                     alignItems: "flex-start",
@@ -739,7 +961,7 @@ const UserManagementView = () => {
                 <Paper
                     variant="outlined"
                     sx={{
-                        borderColor: alpha(theme.palette.divider, 0.86),
+                        borderColor: alpha(theme.palette.divider, 0.32),
                         borderRadius: 3,
                         boxShadow: `0 20px 56px ${alpha(theme.palette.common.black, 0.035)}`,
                         overflow: "hidden",
@@ -748,7 +970,7 @@ const UserManagementView = () => {
                 >
                     <Box
                         sx={{
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.28)}`,
                             p: { md: 4, xs: 2.75 },
                         }}
                     >
@@ -773,6 +995,15 @@ const UserManagementView = () => {
                                 }
                                 description={translate("Checking which user management features are available")}
                                 title={translate("Loading User Management")}
+                            />
+                        ) : null}
+
+                        {verificationOpening ? (
+                            <CenteredState
+                                description={translate(
+                                    "In order to perform this action, policy enforcement requires that two-factor authentication is performed",
+                                )}
+                                title={translate("Verification")}
                             />
                         ) : null}
 
@@ -836,7 +1067,7 @@ const UserManagementView = () => {
                                             variant="outlined"
                                             sx={{
                                                 backgroundColor: alpha(theme.palette.background.default, 0.38),
-                                                borderColor: alpha(theme.palette.divider, 0.72),
+                                                borderColor: alpha(theme.palette.divider, 0.28),
                                                 borderRadius: 2.5,
                                                 p: { md: 2, xs: 1.5 },
                                             }}
@@ -855,7 +1086,7 @@ const UserManagementView = () => {
                                                     label={translate("Search Users")}
                                                     size="small"
                                                     value={searchQuery}
-                                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                                    onChange={(event) => handleSearchChange(event.target.value)}
                                                     slotProps={{
                                                         input: {
                                                             startAdornment: (
@@ -932,27 +1163,43 @@ const UserManagementView = () => {
                                         ) : null}
 
                                         {!usersError && !usersLoading && users.length > 0 ? (
-                                            isMobile ? (
-                                                <UserCards
-                                                    canResetPassword={canResetPassword}
-                                                    canUpdate={canUpdate}
-                                                    onEdit={openEditDialog}
-                                                    onResetPassword={openPasswordResetDialog}
-                                                    onToggle={openToggleDialog}
-                                                    translate={translate}
-                                                    users={users}
+                                            <Fragment>
+                                                {isMobile ? (
+                                                    <UserCards
+                                                        canDelete={canDelete}
+                                                        canResetPassword={canResetPassword}
+                                                        canUpdate={canUpdate}
+                                                        onDelete={openDeleteDialog}
+                                                        onEdit={openEditDialog}
+                                                        onResetPassword={openPasswordResetDialog}
+                                                        onToggle={openToggleDialog}
+                                                        translate={translate}
+                                                        users={pagedUsers}
+                                                    />
+                                                ) : (
+                                                    <UserTable
+                                                        canDelete={canDelete}
+                                                        canResetPassword={canResetPassword}
+                                                        canUpdate={canUpdate}
+                                                        onDelete={openDeleteDialog}
+                                                        onEdit={openEditDialog}
+                                                        onResetPassword={openPasswordResetDialog}
+                                                        onToggle={openToggleDialog}
+                                                        translate={translate}
+                                                        users={pagedUsers}
+                                                    />
+                                                )}
+                                                <TablePagination
+                                                    component="div"
+                                                    count={users.length}
+                                                    labelRowsPerPage={translate("Rows per page")}
+                                                    onPageChange={handleChangePage}
+                                                    onRowsPerPageChange={handleChangeRowsPerPage}
+                                                    page={page}
+                                                    rowsPerPage={rowsPerPage}
+                                                    rowsPerPageOptions={rowsPerPageOptions}
                                                 />
-                                            ) : (
-                                                <UserTable
-                                                    canResetPassword={canResetPassword}
-                                                    canUpdate={canUpdate}
-                                                    onEdit={openEditDialog}
-                                                    onResetPassword={openPasswordResetDialog}
-                                                    onToggle={openToggleDialog}
-                                                    translate={translate}
-                                                    users={users}
-                                                />
-                                            )
+                                            </Fragment>
                                         ) : null}
                                     </Fragment>
                                 )}
@@ -1007,10 +1254,12 @@ const UserManagementView = () => {
 
 const UserDialog = ({
     canNotify,
+    errors,
     loading,
     onClose,
     onSubmit,
     open,
+    passwordPolicy,
     readOnlyUsername = false,
     setValues,
     showPassword,
@@ -1023,6 +1272,8 @@ const UserDialog = ({
 
     const groupValues = useMemo(() => toGroupsArray(values.groups), [values.groups]);
     const notificationEnabled = canNotify && values.email.trim() !== "";
+    const generatingPassword = showPassword && values.generatePassword;
+    const passwordPolicyEnabled = passwordPolicy.mode !== PasswordPolicyMode.Disabled;
 
     return (
         <Dialog
@@ -1036,7 +1287,7 @@ const UserDialog = ({
                 },
             }}
         >
-            <Box component="form" onSubmit={onSubmit}>
+            <Box component="form" noValidate onSubmit={onSubmit}>
                 <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2.25} sx={{ pt: 0.5 }}>
@@ -1069,32 +1320,62 @@ const UserDialog = ({
                         />
                         <TextField
                             disabled={loading}
+                            error={errors.email}
                             fullWidth
                             label={translate("Email")}
+                            required={showPassword}
                             type="email"
                             value={values.email}
                             onChange={(event) =>
                                 setValues((previous) => ({
                                     ...previous,
                                     email: event.target.value,
+                                    generatePassword:
+                                        event.target.value.trim() === "" ? false : previous.generatePassword,
+                                    notify: previous.generatePassword || previous.notify,
                                 }))
                             }
                         />
-                        {showPassword ? (
-                            <TextField
-                                disabled={loading}
-                                fullWidth
-                                label={translate("Password")}
-                                required
-                                type="password"
-                                value={values.password}
-                                onChange={(event) =>
-                                    setValues((previous) => ({
-                                        ...previous,
-                                        password: event.target.value,
-                                    }))
+                        {showPassword && canNotify ? (
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={values.generatePassword}
+                                        disabled={loading || values.email.trim() === ""}
+                                        onChange={(event) =>
+                                            setValues((previous) => ({
+                                                ...previous,
+                                                generatePassword: event.target.checked,
+                                                notify: event.target.checked ? true : previous.notify,
+                                                password: event.target.checked ? "" : previous.password,
+                                            }))
+                                        }
+                                    />
                                 }
+                                label={translate("Generate random password and email it to the user")}
                             />
+                        ) : null}
+                        {showPassword && !generatingPassword ? (
+                            <Box>
+                                <TextField
+                                    disabled={loading}
+                                    error={errors.password}
+                                    fullWidth
+                                    label={translate("Password")}
+                                    required
+                                    type="password"
+                                    value={values.password}
+                                    onChange={(event) =>
+                                        setValues((previous) => ({
+                                            ...previous,
+                                            password: event.target.value,
+                                        }))
+                                    }
+                                />
+                                {passwordPolicyEnabled ? (
+                                    <PasswordMeter value={values.password} policy={passwordPolicy} />
+                                ) : null}
+                            </Box>
                         ) : null}
                         <TextField
                             disabled={loading}
@@ -1142,7 +1423,7 @@ const UserDialog = ({
                                 control={
                                     <Checkbox
                                         checked={values.notify}
-                                        disabled={loading || !notificationEnabled}
+                                        disabled={loading || !notificationEnabled || values.generatePassword}
                                         onChange={(event) =>
                                             setValues((previous) => ({
                                                 ...previous,
@@ -1177,15 +1458,21 @@ const UserDialog = ({
 };
 
 const PasswordResetDialog = ({
+    canNotify,
+    errors,
     loading,
     onClose,
     onSubmit,
     open,
+    passwordPolicy,
+    selectedUser,
     setValues,
     title,
     values,
 }: PasswordResetDialogProps) => {
     const { t: translate } = useTranslation("settings");
+    const canGeneratePassword = canNotify && selectedUser.email.trim() !== "";
+    const passwordPolicyEnabled = passwordPolicy.mode !== PasswordPolicyMode.Disabled;
 
     return (
         <Dialog
@@ -1199,27 +1486,58 @@ const PasswordResetDialog = ({
                 },
             }}
         >
-            <Box component="form" onSubmit={onSubmit}>
+            <Box component="form" noValidate onSubmit={onSubmit}>
                 <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2.25} sx={{ pt: 0.5 }}>
                         <DialogContentText sx={{ mb: 0.5 }}>
                             {translate("Set a new password for this user")}
                         </DialogContentText>
-                        <TextField
-                            disabled={loading}
-                            fullWidth
-                            label={translate("New Password")}
-                            required
-                            type="password"
-                            value={values.password}
-                            onChange={(event) =>
-                                setValues((previous) => ({
-                                    ...previous,
-                                    password: event.target.value,
-                                }))
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={values.generatePassword}
+                                    disabled={loading || !canGeneratePassword}
+                                    onChange={(event) =>
+                                        setValues((previous) => ({
+                                            ...previous,
+                                            generatePassword: event.target.checked,
+                                            password: event.target.checked ? "" : previous.password,
+                                        }))
+                                    }
+                                />
                             }
+                            label={translate("Generate random password and email it to the user")}
                         />
+                        {!canGeneratePassword ? (
+                            <Alert severity="info">
+                                {canNotify
+                                    ? translate("Email notification is unavailable for this user")
+                                    : translate("Email notifications are unavailable for this backend")}
+                            </Alert>
+                        ) : null}
+                        {!values.generatePassword ? (
+                            <Box>
+                                <TextField
+                                    disabled={loading}
+                                    error={errors.password}
+                                    fullWidth
+                                    label={translate("New Password")}
+                                    required
+                                    type="password"
+                                    value={values.password}
+                                    onChange={(event) =>
+                                        setValues((previous) => ({
+                                            ...previous,
+                                            password: event.target.value,
+                                        }))
+                                    }
+                                />
+                                {passwordPolicyEnabled ? (
+                                    <PasswordMeter value={values.password} policy={passwordPolicy} />
+                                ) : null}
+                            </Box>
+                        ) : null}
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, py: 2.25 }}>
@@ -1267,8 +1585,10 @@ const ConfirmDialog = ({ actionLabel, description, loading, onClose, onConfirm, 
 };
 
 interface UserCollectionProps {
+    canDelete: boolean;
     canResetPassword: boolean;
     canUpdate: boolean;
+    onDelete: (user: AdminUser) => void;
     onEdit: (username: string) => void;
     onResetPassword: (username: string) => void;
     onToggle: (user: AdminUser) => void;
@@ -1277,8 +1597,10 @@ interface UserCollectionProps {
 }
 
 const UserTable = ({
+    canDelete,
     canResetPassword,
     canUpdate,
+    onDelete,
     onEdit,
     onResetPassword,
     onToggle,
@@ -1292,7 +1614,7 @@ const UserTable = ({
             component={Paper}
             variant="outlined"
             sx={{
-                borderColor: alpha(theme.palette.divider, 0.72),
+                borderColor: alpha(theme.palette.divider, 0.32),
                 borderRadius: 2.5,
                 overflow: "hidden",
             }}
@@ -1300,12 +1622,12 @@ const UserTable = ({
             <Table
                 sx={{
                     "& .MuiTableCell-body": {
-                        borderBottomColor: alpha(theme.palette.divider, 0.5),
+                        borderBottomColor: alpha(theme.palette.divider, 0.28),
                         py: 1.5,
                     },
                     "& .MuiTableCell-head": {
                         backgroundColor: alpha(theme.palette.background.default, 0.44),
-                        borderBottomColor: alpha(theme.palette.divider, 0.72),
+                        borderBottomColor: alpha(theme.palette.divider, 0.32),
                         color: "text.secondary",
                         fontSize: theme.typography.caption.fontSize,
                         fontWeight: 700,
@@ -1342,8 +1664,10 @@ const UserTable = ({
                             </TableCell>
                             <TableCell align="right">
                                 <RowActions
+                                    canDelete={canDelete}
                                     canResetPassword={canResetPassword}
                                     canUpdate={canUpdate}
+                                    onDelete={() => onDelete(user)}
                                     onEdit={() => onEdit(user.username)}
                                     onResetPassword={() => onResetPassword(user.username)}
                                     onToggle={() => onToggle(user)}
@@ -1360,8 +1684,10 @@ const UserTable = ({
 };
 
 const UserCards = ({
+    canDelete,
     canResetPassword,
     canUpdate,
+    onDelete,
     onEdit,
     onResetPassword,
     onToggle,
@@ -1374,7 +1700,7 @@ const UserCards = ({
                 key={user.username}
                 variant="outlined"
                 sx={(theme) => ({
-                    borderColor: alpha(theme.palette.divider, 0.72),
+                    borderColor: alpha(theme.palette.divider, 0.32),
                     borderRadius: 2.5,
                     boxShadow: `0 10px 28px ${alpha(theme.palette.common.black, 0.025)}`,
                 })}
@@ -1398,8 +1724,10 @@ const UserCards = ({
                 </CardContent>
                 <CardActions sx={{ justifyContent: "flex-end", pb: 2, pt: 0, px: 2 }}>
                     <RowActions
+                        canDelete={canDelete}
                         canResetPassword={canResetPassword}
                         canUpdate={canUpdate}
+                        onDelete={() => onDelete(user)}
                         onEdit={() => onEdit(user.username)}
                         onResetPassword={() => onResetPassword(user.username)}
                         onToggle={() => onToggle(user)}
@@ -1443,16 +1771,20 @@ const StatusChip = ({ disabled, translate }: { disabled: boolean; translate: (ke
 );
 
 const RowActions = ({
+    canDelete,
     canResetPassword,
     canUpdate,
+    onDelete,
     onEdit,
     onResetPassword,
     onToggle,
     translate,
     user,
 }: {
+    canDelete: boolean;
     canResetPassword: boolean;
     canUpdate: boolean;
+    onDelete: () => void;
     onEdit: () => void;
     onResetPassword: () => void;
     onToggle: () => void;
@@ -1485,14 +1817,26 @@ const RowActions = ({
             </Tooltip>
         ) : null}
         {canUpdate ? (
-            <Tooltip title={user.disabled ? translate("Enable User") : translate("Disable User")}>
+            <Tooltip title={user.disabled ? translate("Allow Sign-In") : translate("Block Sign-In")}>
                 <IconButton
-                    aria-label={`${user.disabled ? translate("Enable User") : translate("Disable User")} ${user.username}`}
+                    aria-label={`${user.disabled ? translate("Allow Sign-In") : translate("Block Sign-In")} ${user.username}`}
                     onClick={onToggle}
                     size="small"
                     sx={{ color: "text.secondary" }}
                 >
                     {user.disabled ? <Person fontSize="small" /> : <PersonOff fontSize="small" />}
+                </IconButton>
+            </Tooltip>
+        ) : null}
+        {canDelete ? (
+            <Tooltip title={translate("Delete User")}>
+                <IconButton
+                    aria-label={`${translate("Delete User")} ${user.username}`}
+                    onClick={onDelete}
+                    size="small"
+                    sx={{ color: "text.secondary" }}
+                >
+                    <Delete fontSize="small" />
                 </IconButton>
             </Tooltip>
         ) : null}
@@ -1505,7 +1849,7 @@ const CenteredState = ({ action, description, title }: { action?: ReactNode; des
         sx={(theme) => ({
             alignItems: "center",
             backgroundColor: alpha(theme.palette.background.default, 0.28),
-            borderColor: alpha(theme.palette.divider, 0.72),
+            borderColor: alpha(theme.palette.divider, 0.28),
             borderRadius: 2.5,
             display: "flex",
             justifyContent: "center",
