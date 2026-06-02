@@ -219,6 +219,18 @@ it("updates a user", async () => {
     expect(PatchWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, payload, undefined);
 });
 
+it("updates a user with a partial payload", async () => {
+    const payload = {
+        disabled: true,
+    };
+
+    vi.mocked(PatchWithOptionalResponse).mockResolvedValue(undefined);
+
+    await updateAdminUser("john/doe", payload);
+
+    expect(PatchWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, payload, undefined);
+});
+
 it("resets a user password", async () => {
     const payload = {
         password: "new-password",

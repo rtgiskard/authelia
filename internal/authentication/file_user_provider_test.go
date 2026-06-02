@@ -1034,6 +1034,25 @@ func TestFileUserProviderAdminUpdateShouldRejectEmailUsernameConflictWithoutMuta
 	})
 }
 
+func TestFileUserProviderAdminUpdateShouldAllowDisabledOnlyBlankEmailUser(t *testing.T) {
+	content := []byte(strings.ReplaceAll(string(UserDatabaseContent), "email: harry.potter@authelia.com", "email: \"\""))
+
+	WithDatabase(t, content, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+
+		provider := NewFileUserProvider(&config)
+
+		assert.NoError(t, provider.StartupCheck())
+
+		disabled := true
+		updated, err := provider.AdminUpdateUser("harry", UserProviderAdminUserUpdate{Disabled: &disabled})
+		assert.NoError(t, err)
+		assert.Equal(t, "", updated.Email)
+		assert.True(t, updated.Disabled)
+	})
+}
+
 func TestFileUserProviderAdminUpdateShouldUseMatchedUsernameKey(t *testing.T) {
 	WithDatabase(t, UserDatabaseContent, func(path string) {
 		config := DefaultFileAuthenticationBackendConfiguration

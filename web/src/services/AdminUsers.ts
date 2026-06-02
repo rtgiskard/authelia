@@ -62,10 +62,10 @@ export interface AdminPasswordResetPayload {
 }
 
 export interface AdminUpdateUserPayload {
-    disabled: boolean;
-    display_name: string;
-    email: string;
-    groups: string[];
+    disabled?: boolean;
+    display_name?: string;
+    email?: string;
+    groups?: string[];
 }
 
 export interface AdminCreateUserPayload {

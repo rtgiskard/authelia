@@ -753,8 +753,9 @@ const UserManagementView = () => {
         event.preventDefault();
 
         const payload = toUpdatePayload(editValues);
-        const emailMissing = payload.email === "";
-        const emailConflict = hasEmailConflict(identityUsers, payload.email, editUsername);
+        const email = payload.email ?? "";
+        const emailMissing = email === "";
+        const emailConflict = hasEmailConflict(identityUsers, email, editUsername);
 
         setEditErrors({
             email: emailMissing || emailConflict,
@@ -905,12 +906,7 @@ const UserManagementView = () => {
         setToggleSubmitting(true);
 
         try {
-            await updateAdminUser(toggleUsername, {
-                disabled: toggleNextDisabled,
-                display_name: user.display_name,
-                email: user.email,
-                groups: user.groups,
-            });
+            await updateAdminUser(toggleUsername, { disabled: toggleNextDisabled });
             createSuccessNotification(
                 toggleNextDisabled ? translate("User disabled successfully") : translate("User enabled successfully"),
             );

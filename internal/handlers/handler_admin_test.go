@@ -444,6 +444,26 @@ func TestAdminUserPATCH_ShouldSucceed(t *testing.T) {
 	mock.Assert200OK(t, result)
 }
 
+func TestAdminUserPATCH_ShouldAllowDisabledOnlyUpdate(t *testing.T) {
+	mock := mocks.NewMockAutheliaCtx(t)
+
+	defer mock.Close()
+
+	mock.Ctx.SetUserValue("username", "john")
+	disabled := true
+	bodyBytes, err := json.Marshal(adminUpdateUserRequestBody{Disabled: &disabled})
+	assert.NoError(t, err)
+	adminSetJSONBody(mock.Ctx, bodyBytes)
+
+	update := authentication.UserProviderAdminUserUpdate{Disabled: &disabled}
+	result := authentication.UserProviderAdminUserDetails{Username: "john", DisplayName: "John Doe", Disabled: true}
+	mock.UserProviderMock.EXPECT().AdminUpdateUser("john", update).Return(result, nil)
+
+	AdminUserPATCH(mock.Ctx)
+
+	mock.Assert200OK(t, result)
+}
+
 func TestAdminUserPATCH_ShouldRejectBlankDisplayName(t *testing.T) {
 	mock := mocks.NewMockAutheliaCtx(t)
 

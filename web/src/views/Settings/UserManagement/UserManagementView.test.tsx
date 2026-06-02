@@ -660,6 +660,30 @@ it("hides delete actions and uses clearer sign-in labels when delete is unavaila
     expect(screen.queryByRole("button", { name: "Delete User alice" })).not.toBeInTheDocument();
 });
 
+it("toggles a user with a disabled-only update payload", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "",
+            groups: ["admins"],
+            username: "alice",
+        },
+    ]);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Disable User alice" }));
+
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Disable User" }));
+
+    await waitFor(() => {
+        expect(updateAdminUser).toHaveBeenCalledWith("alice", { disabled: true });
+    });
+});
+
 it("uses client-side pagination for listed users", async () => {
     vi.mocked(listAdminUsers).mockResolvedValue(
         Array.from({ length: 21 }, (_value, index) => ({

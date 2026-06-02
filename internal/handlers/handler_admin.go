@@ -164,7 +164,7 @@ func AdminUserPATCH(ctx *middlewares.AutheliaCtx) {
 		return
 	}
 
-	if update.Email == nil || strings.TrimSpace(*update.Email) == "" {
+	if update.Email != nil && strings.TrimSpace(*update.Email) == "" {
 		ctx.SetJSONError(adminUserEmailRequired)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return

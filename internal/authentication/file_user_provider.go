@@ -163,7 +163,7 @@ func (p *FileUserProvider) AdminGetUser(username string) (details UserProviderAd
 }
 
 func (p *FileUserProvider) AdminUpdateUser(username string, update UserProviderAdminUserUpdate) (details UserProviderAdminUserDetails, err error) {
-	if update.Email == nil || strings.TrimSpace(*update.Email) == "" {
+	if update.Email != nil && strings.TrimSpace(*update.Email) == "" {
 		return details, ErrOperationFailed
 	}
 
