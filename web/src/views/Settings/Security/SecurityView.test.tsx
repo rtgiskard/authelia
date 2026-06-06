@@ -2,8 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import SecurityView from "@views/Settings/Security/SecurityView";
 
+type ChangePasswordDialogMockProps = { flow: string; open: boolean; setClosed: () => void };
+
 const mocks = vi.hoisted(() => ({
-    changePasswordDialog: vi.fn(({ flow, open }: { flow: string; open: boolean }) => (
+    changePasswordDialog: vi.fn(({ flow, open }: ChangePasswordDialogMockProps) => (
         <div data-flow={flow} data-open={open ? "true" : "false"} data-testid="change-password-dialog" />
     )),
     fetchConfiguration: vi.fn(),
@@ -64,7 +66,7 @@ vi.mock("@views/Settings/Security/ChangePasswordDialog", () => ({
 
 beforeEach(() => {
     mocks.changePasswordDialog.mockReset();
-    mocks.changePasswordDialog.mockImplementation(({ flow, open }: { flow: string; open: boolean }) => (
+    mocks.changePasswordDialog.mockImplementation(({ flow, open }: ChangePasswordDialogMockProps) => (
         <div data-flow={flow} data-open={open ? "true" : "false"} data-testid="change-password-dialog" />
     ));
     mocks.fetchConfiguration.mockReset();
@@ -110,7 +112,7 @@ it("does not reopen verification when the preparing flow is cancelled", async ()
         }),
     );
 
-    mocks.changePasswordDialog.mockImplementation(({ open, setClosed }: { open: boolean; setClosed: () => void }) =>
+    mocks.changePasswordDialog.mockImplementation(({ open, setClosed }: ChangePasswordDialogMockProps) => (
         <button
             data-open={open ? "true" : "false"}
             data-testid="change-password-dialog"
@@ -119,7 +121,7 @@ it("does not reopen verification when the preparing flow is cancelled", async ()
         >
             change-password-dialog
         </button>
-    );
+    ));
 
     render(<SecurityView />);
 

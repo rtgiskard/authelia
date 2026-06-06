@@ -223,8 +223,8 @@ const SettingsView = () => {
                 sx={{
                     alignItems: "flex-start",
                     display: "flex",
-                    minHeight: "100vh",
                     justifyContent: "center",
+                    minHeight: "100vh",
                     pb: 4,
                     pt: 8,
                 }}

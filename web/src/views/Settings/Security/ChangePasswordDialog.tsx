@@ -20,11 +20,11 @@ import { useTranslation } from "react-i18next";
 import PasswordMeter from "@components/PasswordMeter";
 import { useNotifications } from "@contexts/NotificationsContext";
 import useCheckCapsLock from "@hooks/CapsLock";
-import { PasswordPolicyMode, type PasswordPolicyConfiguration } from "@models/PasswordPolicy";
+import { type PasswordPolicyConfiguration, PasswordPolicyMode } from "@models/PasswordPolicy";
 import { postPasswordChange } from "@services/ChangePassword";
 import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
 
-export type ChangePasswordFlowState = "preparing" | "verifying" | "ready" | "success";
+export type ChangePasswordFlowState = "preparing" | "ready" | "success" | "verifying";
 
 interface Props {
     username: string;
@@ -54,7 +54,7 @@ const ChangePasswordDialog = (props: Props) => {
     const oldPasswordRef = useRef<HTMLInputElement | null>(null);
     const newPasswordRef = useRef<HTMLInputElement | null>(null);
     const repeatNewPasswordRef = useRef<HTMLInputElement | null>(null);
-    const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const closeTimerRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 
     const [pPolicy, setPPolicy] = useState<PasswordPolicyConfiguration>({
         max_length: 0,
@@ -95,9 +95,9 @@ const ChangePasswordDialog = (props: Props) => {
     }, [resetPasswordErrors, resetCapsLockErrors]);
 
     const handleClose = useCallback(() => {
-        if (closeTimer.current) {
-            clearTimeout(closeTimer.current);
-            closeTimer.current = null;
+        if (closeTimerRef.current) {
+            clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = null;
         }
 
         props.setClosed();
@@ -122,9 +122,12 @@ const ChangePasswordDialog = (props: Props) => {
                 if (active) {
                     setLoading(false);
                     createErrorNotification(
-                        translate("There was an issue completing the process the verification token might have expired", {
-                            ns: "portal",
-                        }),
+                        translate(
+                            "There was an issue completing the process the verification token might have expired",
+                            {
+                                ns: "portal",
+                            },
+                        ),
                     );
                 }
             }
@@ -137,9 +140,9 @@ const ChangePasswordDialog = (props: Props) => {
 
     useEffect(() => {
         return () => {
-            if (closeTimer.current) {
-                clearTimeout(closeTimer.current);
-                closeTimer.current = null;
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
             }
         };
     }, []);
@@ -173,7 +176,7 @@ const ChangePasswordDialog = (props: Props) => {
             setLoading(false);
             props.setFlow("success");
             createSuccessNotification(translate("Password changed successfully"));
-            closeTimer.current = setTimeout(handleClose, 1200);
+            closeTimerRef.current = setTimeout(handleClose, 1200);
         } catch (err) {
             resetPasswordErrors();
             setLoading(false);
@@ -279,7 +282,13 @@ const ChangePasswordDialog = (props: Props) => {
             case "ready":
                 return (
                     <FormControl id={"change-password-form"} disabled={loading}>
-                        <Grid container spacing={1} alignItems={"center"} justifyContent={"center"} textAlign={"center"}>
+                        <Grid
+                            container
+                            spacing={1}
+                            alignItems={"center"}
+                            justifyContent={"center"}
+                            textAlign={"center"}
+                        >
                             <Grid size={{ xs: 12 }} sx={{ pt: 3 }}>
                                 <TextField
                                     inputRef={oldPasswordRef}
@@ -372,7 +381,9 @@ const ChangePasswordDialog = (props: Props) => {
                             id={"password-change-dialog-submit"}
                             color={"primary"}
                             onClick={handlePasswordChange}
-                            disabled={!(oldPassword.length && newPassword.length && repeatNewPassword.length) || loading}
+                            disabled={
+                                !(oldPassword.length && newPassword.length && repeatNewPassword.length) || loading
+                            }
                             startIcon={loading ? <CircularProgress color="inherit" size={20} /> : undefined}
                         >
                             {translate("Change Password")}
