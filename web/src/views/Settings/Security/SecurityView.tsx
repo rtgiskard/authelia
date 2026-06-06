@@ -1,16 +1,17 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 
-import { Box, Button, Container, List, ListItem, Paper, Stack, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Button, Container, List, ListItem, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
 import { useNotifications } from "@contexts/NotificationsContext";
 import { useConfiguration } from "@hooks/Configuration";
 import { useUserInfoGET } from "@hooks/UserInfo";
-import { Configuration } from "@models/Configuration";
-import { UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
+import type { Configuration } from "@models/Configuration";
+import { getUserSessionElevation } from "@services/UserSessionElevation";
+import type { UserSessionElevation } from "@services/UserSessionElevation";
 import IdentityVerificationDialog from "@views/Settings/Common/IdentityVerificationDialog";
 import SecondFactorDialog from "@views/Settings/Common/SecondFactorDialog";
-import ChangePasswordDialog from "@views/Settings/Security/ChangePasswordDialog";
+import ChangePasswordDialog, { type ChangePasswordFlowState } from "@views/Settings/Security/ChangePasswordDialog";
 
 interface PasswordChangeButtonProps {
     configuration: Configuration | undefined;
@@ -40,9 +41,8 @@ const PasswordChangeButton = ({ configuration, handleChangePassword, translate }
     );
 };
 
-const SettingsView = function () {
+const SettingsView = () => {
     const { t: translate } = useTranslation(["settings", "portal"]);
-    const theme = useTheme();
     const { createErrorNotification } = useNotifications();
 
     const [userInfo, fetchUserInfo, , fetchUserInfoError] = useUserInfoGET();
@@ -51,25 +51,27 @@ const SettingsView = function () {
     const [dialogIVOpening, setDialogIVOpening] = useState(false);
     const [dialogPWChangeOpen, setDialogPWChangeOpen] = useState(false);
     const [dialogPWChangeOpening, setDialogPWChangeOpening] = useState(false);
+    const [dialogPWChangeFlow, setDialogPWChangeFlow] = useState<ChangePasswordFlowState>("preparing");
     const [configuration, fetchConfiguration, , fetchConfigurationError] = useConfiguration();
 
-    const handleResetStateOpening = () => {
+    const handleResetStateOpening = useCallback(() => {
         setDialogSFOpening(false);
         setDialogIVOpening(false);
         setDialogPWChangeOpening(false);
-    };
+    }, []);
 
     const handleResetState = useCallback(() => {
         handleResetStateOpening();
 
         setElevation(undefined);
         setDialogPWChangeOpen(false);
-    }, []);
+        setDialogPWChangeFlow("preparing");
+    }, [handleResetStateOpening]);
 
     const handleOpenChangePWDialog = useCallback(() => {
         handleResetStateOpening();
-        setDialogPWChangeOpen(true);
-    }, []);
+        setDialogPWChangeFlow("ready");
+    }, [handleResetStateOpening]);
 
     const handleSFDialogClosed = (ok: boolean, changed: boolean) => {
         if (!ok) {
@@ -148,12 +150,21 @@ const SettingsView = function () {
     };
 
     const handleElevation = () => {
-        handleElevationRefresh().catch(console.error);
-
-        setDialogSFOpening(true);
+        setDialogPWChangeFlow("preparing");
+        handleElevationRefresh()
+            .then(() => {
+                setDialogPWChangeFlow("verifying");
+                setDialogSFOpening(true);
+            })
+            .catch((error) => {
+                console.error(error);
+                createErrorNotification(translate("Failed to get session elevation status"));
+                handleResetState();
+            });
     };
 
     const handleChangePassword = () => {
+        setDialogPWChangeOpen(true);
         setDialogPWChangeOpening(true);
 
         handleElevation();
@@ -191,81 +202,66 @@ const SettingsView = function () {
             <ChangePasswordDialog
                 username={userInfo?.display_name || ""}
                 open={dialogPWChangeOpen}
+                flow={dialogPWChangeFlow}
+                setFlow={setDialogPWChangeFlow}
                 setClosed={() => {
                     handleResetState();
                 }}
             />
 
             <Container
+                maxWidth="md"
                 sx={{
                     alignItems: "flex-start",
                     display: "flex",
-                    height: "100vh",
+                    minHeight: "100vh",
                     justifyContent: "center",
+                    pb: 4,
                     pt: 8,
                 }}
             >
-                <Paper
-                    variant="outlined"
-                    sx={{
-                        alignItems: "center",
-                        display: "flex",
-                        height: "auto",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Stack spacing={2} sx={{ m: 2, width: "100%" }}>
-                        <Box sx={{ p: { md: 3, xs: 1 } }}>
-                            <Box
-                                sx={{
-                                    border: `1px solid ${theme.palette.grey[600]}`,
-                                    borderRadius: 1,
-                                    mb: 1,
-                                    p: 1.25,
-                                    width: "100%",
-                                }}
-                            >
-                                <Typography>
-                                    {translate("Name")}: {userInfo?.display_name || ""}
+                <Stack spacing={3} sx={{ width: "100%" }}>
+                    <Paper variant="outlined" sx={{ p: { md: 3, xs: 2 } }}>
+                        <Stack spacing={2}>
+                            <Typography variant="h6">{translate("Profile")}</Typography>
+                            <Box>
+                                <Typography variant="body2" color="text.secondary">
+                                    {translate("Name")}
                                 </Typography>
+                                <Typography>{userInfo?.display_name || ""}</Typography>
                             </Box>
-                            <Box
-                                sx={{
-                                    border: `1px solid ${theme.palette.grey[600]}`,
-                                    borderRadius: 1,
-                                    mb: 1,
-                                    p: 1.25,
-                                    width: "100%",
-                                }}
-                            >
-                                <Box display="flex" alignItems="center">
-                                    <Typography sx={{ mr: 1 }}>{translate("Email")}:</Typography>
-                                    <Typography>{userInfo?.emails?.[0] || ""}</Typography>
-                                </Box>
+                            <Box>
+                                <Typography variant="body2" color="text.secondary">
+                                    {translate("Email")}
+                                </Typography>
+                                <Typography>{userInfo?.emails?.[0] || ""}</Typography>
                                 {userInfo?.emails && userInfo.emails.length > 1 && (
-                                    <List sx={{ padding: 0, pl: 4, width: "100%" }}>
-                                        {" "}
+                                    <List sx={{ p: 0, pl: 2, width: "100%" }}>
                                         {userInfo.emails.slice(1).map((email: string) => (
-                                            <ListItem key={email} sx={{ paddingBottom: 0, paddingTop: 0 }}>
+                                            <ListItem key={email} sx={{ py: 0 }}>
                                                 <Typography>{email}</Typography>
                                             </ListItem>
                                         ))}
                                     </List>
                                 )}
                             </Box>
-                            <Box
-                                sx={{ border: `1px solid ${theme.palette.grey[600]}`, borderRadius: 1, mb: 1, p: 1.25 }}
-                            >
-                                <Typography>{translate("Password")}: ●●●●●●●●</Typography>
-                            </Box>
+                        </Stack>
+                    </Paper>
+                    <Paper variant="outlined" sx={{ p: { md: 3, xs: 2 } }}>
+                        <Stack spacing={2}>
+                            <Typography variant="h6">{translate("Password")}</Typography>
+                            <Typography>{translate("Password")}: ●●●●●●●●</Typography>
+                            <Typography color="text.secondary">
+                                {translate("Update your password after verifying your identity")}
+                            </Typography>
                             <PasswordChangeButton
                                 configuration={configuration}
                                 translate={translate}
                                 handleChangePassword={handleChangePassword}
                             />
-                        </Box>
-                    </Stack>
-                </Paper>
+                        </Stack>
+                    </Paper>
+                </Stack>
             </Container>
         </Fragment>
     );

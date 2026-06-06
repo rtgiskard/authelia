@@ -119,5 +119,11 @@
 	"You must use the code from the same device and browser that initiated the process": "您必須使用啟動此程序的相同裝置和瀏覽器的代碼",
 	"Your browser does not appear to support the configuration": "您的瀏覽器似乎不支援此配置",
 	"Your browser does not support the WebAuthn protocol": "您的瀏覽器不支援 WebAuthn 協議",
-	"Your device does not support user verification or resident keys but this was required": "您的裝置不支援使用者驗證或常駐金鑰，但這是必要的"
+	"Your device does not support user verification or resident keys but this was required": "您的裝置不支援使用者驗證或常駐金鑰，但這是必要的",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

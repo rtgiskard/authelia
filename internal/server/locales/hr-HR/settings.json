@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "Morate koristiti kod s istog uređaja i preglednika koji je pokrenuo proces",
 	"Your browser does not appear to support the configuration": "Vaš preglednik se čini da ne podržava ovaj konfiguraciju",
 	"Your browser does not support the WebAuthn protocol": "Vaš preglednik ne podržava WebAuthn protokol",
-	"Your device does not support user verification or resident keys but this was required": "Vaš uređaj ne podržava verifikaciju korisnika ili rezidentne ključeve, ali to je bilo potrebno"
+	"Your device does not support user verification or resident keys but this was required": "Vaš uređaj ne podržava verifikaciju korisnika ili rezidentne ključeve, ali to je bilo potrebno",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

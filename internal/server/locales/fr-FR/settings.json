@@ -159,5 +159,11 @@
 	"Your browser does not appear to support the configuration": "Votre navigateur ne semble pas prendre en charge la configuration",
 	"Your browser does not support the WebAuthn protocol": "Votre navigateur ne supporte pas le protocole WebAuthn",
 	"Your supplied password does not meet the password policy requirements": "Le mot de passe que vous avez fourni ne répond pas aux exigences de la politique de mot de passe",
-	"Your device does not support user verification or resident keys but this was required": "Votre appareil ne prend pas en charge la vérification de l'utilisateur ou les clés de résidence, mais cela a été requis"
+	"Your device does not support user verification or resident keys but this was required": "Votre appareil ne prend pas en charge la vérification de l'utilisateur ou les clés de résidence, mais cela a été requis",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

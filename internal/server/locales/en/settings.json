@@ -242,5 +242,11 @@
 	"User updated successfully": "User updated successfully",
 	"user": "user",
 	"Your backend supports user management but does not allow listing users from this interface": "Your backend supports user management but does not allow listing users from this interface",
-	"{{action}} {{username}}": "{{action}} {{username}}"
+	"{{action}} {{username}}": "{{action}} {{username}}",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

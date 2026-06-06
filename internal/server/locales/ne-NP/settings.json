@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "तपाईंले प्रक्रियाको सुरुवातमा प्रयोग गरिएको उपकरण र ब्राउजरको कोड प्रयोग गर्नुपर्छ",
 	"Your browser does not appear to support the configuration": "तपाईंको ब्राउजर कन्फिगरेशनलाई समर्थन गर्ने जस्तो देखिन्न",
 	"Your browser does not support the WebAuthn protocol": "तपाईंको ब्राउजरले WebAuthn प्रोटोकललाई समर्थन गर्दैन",
-	"Your device does not support user verification or resident keys but this was required": "तपाईंको उपकरणले प्रयोगकर्ता सत्यापन वा निवासी कुञ्जीहरू समर्थन गर्दैन तर यो आवश्यक थियो"
+	"Your device does not support user verification or resident keys but this was required": "तपाईंको उपकरणले प्रयोगकर्ता सत्यापन वा निवासी कुञ्जीहरू समर्थन गर्दैन तर यो आवश्यक थियो",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

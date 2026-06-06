@@ -1,6 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import SecurityView from "@views/Settings/Security/SecurityView";
+
+const mocks = vi.hoisted(() => ({
+    getUserSessionElevation: vi.fn(),
+}));
 
 vi.mock("react-i18next", () => ({
     useTranslation: () => ({ t: (key: string) => key }),
@@ -38,7 +42,7 @@ vi.mock("@hooks/UserInfo", () => ({
 }));
 
 vi.mock("@services/UserSessionElevation", () => ({
-    getUserSessionElevation: vi.fn().mockResolvedValue({ elevated: false }),
+    getUserSessionElevation: mocks.getUserSessionElevation,
 }));
 
 vi.mock("@views/Settings/Common/IdentityVerificationDialog", () => ({
@@ -50,11 +54,20 @@ vi.mock("@views/Settings/Common/SecondFactorDialog", () => ({
 }));
 
 vi.mock("@views/Settings/Security/ChangePasswordDialog", () => ({
-    default: () => <div data-testid="change-password-dialog" />,
+    default: ({ flow, open }: { flow: string; open: boolean }) => (
+        <div data-flow={flow} data-open={open ? "true" : "false"} data-testid="change-password-dialog" />
+    ),
 }));
+
+beforeEach(() => {
+    mocks.getUserSessionElevation.mockReset();
+    mocks.getUserSessionElevation.mockResolvedValue({ elevated: false });
+});
 
 it("renders user info and change password button", () => {
     render(<SecurityView />);
+    expect(screen.getByText("Profile")).toBeInTheDocument();
+    expect(screen.getAllByText("Password").length).toBeGreaterThan(0);
     expect(screen.getByText(/John Doe/)).toBeInTheDocument();
     expect(screen.getByText("Change Password")).toBeInTheDocument();
 });
@@ -64,4 +77,18 @@ it("renders dialogs", () => {
     expect(screen.getByTestId("identity-dialog")).toBeInTheDocument();
     expect(screen.getByTestId("second-factor-dialog")).toBeInTheDocument();
     expect(screen.getByTestId("change-password-dialog")).toBeInTheDocument();
+});
+
+it("opens the change password dialog immediately while preparing elevation", async () => {
+    render(<SecurityView />);
+
+    fireEvent.click(screen.getByText("Change Password"));
+
+    expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-flow", "preparing");
+    expect(mocks.getUserSessionElevation).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+        expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-flow", "verifying");
+    });
 });

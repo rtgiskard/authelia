@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "நீங்கள் செயல்முறை தொடங்கிய அதே சாதனம் மற்றும் உலாவியில் இருந்து குறியீட்டை பயன்படுத்த வேண்டும்",
 	"Your browser does not appear to support the configuration": "உங்கள் உலாவி அமைப்பை ஆதரிக்க ஆதரிக்கதாயிருப்பது",
 	"Your browser does not support the WebAuthn protocol": "உங்கள் உலாவி WebAuthn நெறிமுறையை ஆதரிக்கவில்லை",
-	"Your device does not support user verification or resident keys but this was required": "உங்கள் சாதனம் பயனர் அங்கீகரிப்பை அல்லது வசந்த ஆபரணங்களை ஆதரிக்கவில்லை, ஆனால் இது அவசியமாக இருந்தது"
+	"Your device does not support user verification or resident keys but this was required": "உங்கள் சாதனம் பயனர் அங்கீகரிப்பை அல்லது வசந்த ஆபரணங்களை ஆதரிக்கவில்லை, ஆனால் இது அவசியமாக இருந்தது",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

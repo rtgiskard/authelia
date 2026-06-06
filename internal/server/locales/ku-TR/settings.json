@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "تۆ پێویستە کۆدی تایبەتی بەکاربەیت لە همان بە شێوە و بەرزە کە کارەکەی پەیوەندیدا کرد",
 	"Your browser does not appear to support the configuration": "بەرزە تەندروستە لە پەخشی دروستکراوی پێویستە",
 	"Your browser does not support the WebAuthn protocol": "بەرزە بە دروستکراوی WebAuthn وەکو پەیوەندیدا",
-	"Your device does not support user verification or resident keys but this was required": "بەرزە تەندروستە کە background لە تێپەڕەکان یا خەریندنی بەرزە ناتوانێ"
+	"Your device does not support user verification or resident keys but this was required": "بەرزە تەندروستە کە background لە تێپەڕەکان یا خەریندنی بەرزە ناتوانێ",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "Devi usare il codice dallo stesso dispositivo e browser che ha avviato il processo",
 	"Your browser does not appear to support the configuration": "Il tuo browser non sembra supportare la configurazione",
 	"Your browser does not support the WebAuthn protocol": "Il tuo browser non supporta il protocollo WebAuthn",
-	"Your device does not support user verification or resident keys but this was required": "Il tuo dispositivo non supporta la verifica dell'utente o le chiavi residenti, ma questo era richiesto"
+	"Your device does not support user verification or resident keys but this was required": "Il tuo dispositivo non supporta la verifica dell'utente o le chiavi residenti, ma questo era richiesto",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

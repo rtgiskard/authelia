@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "Anda mesti menggunakan kod dari peranti dan pelayar yang sama yang memulakan proses",
 	"Your browser does not appear to support the configuration": "Pelayar anda tidak nampaknya menyokong konfigurasi",
 	"Your browser does not support the WebAuthn protocol": "Pelayar anda tidak menyokong protokol WebAuthn",
-	"Your device does not support user verification or resident keys but this was required": "Peranti anda tidak menyokong pengesahan pengguna atau kunci kediaman tetapi ini diperlukan"
+	"Your device does not support user verification or resident keys but this was required": "Peranti anda tidak menyokong pengesahan pengguna atau kunci kediaman tetapi ini diperlukan",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

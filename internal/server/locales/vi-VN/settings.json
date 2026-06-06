@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "Bản phải dùng mã từ cùng thiết bị và trình duyệt mà đã bắt đầu quá trình",
 	"Your browser does not appear to support the configuration": "Trình duyệt của bạn có vẻ không hỗ trợ cấu hình này",
 	"Your browser does not support the WebAuthn protocol": "Trình duyệt của bạn không hỗ trợ giao thức WebAuthn",
-	"Your device does not support user verification or resident keys but this was required": "Thiết bị của bạn không hỗ trợ xác thực người dùng hoặc mã nội trú. Nhưng điều này là bắt buộc"
+	"Your device does not support user verification or resident keys but this was required": "Thiết bị của bạn không hỗ trợ xác thực người dùng hoặc mã nội trú. Nhưng điều này là bắt buộc",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

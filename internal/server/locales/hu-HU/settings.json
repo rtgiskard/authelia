@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "A kódot ugyanazon eszközről és böngészőből kell használnia, amely elindította a folyamatot",
 	"Your browser does not appear to support the configuration": "A böngészője nem támogatja a konfigurációt",
 	"Your browser does not support the WebAuthn protocol": "A böngészője nem támogatja a WebAuthn protokollt",
-	"Your device does not support user verification or resident keys but this was required": "Az Ön eszköze nem támogatja a felhasználó ellenőrzését vagy a lakókulcsokat, de erre szükség volt"
+	"Your device does not support user verification or resident keys but this was required": "Az Ön eszköze nem támogatja a felhasználó ellenőrzését vagy a lakókulcsokat, de erre szükség volt",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

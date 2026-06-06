@@ -1,6 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import ChangePasswordDialog from "@views/Settings/Security/ChangePasswordDialog";
+
+const mocks = vi.hoisted(() => ({
+    getPasswordPolicyConfiguration: vi.fn(),
+    postPasswordChange: vi.fn(),
+}));
 
 vi.mock("react-i18next", () => ({
     useTranslation: () => ({ t: (key: string) => key }),
@@ -22,11 +27,16 @@ vi.mock("@components/PasswordMeter", () => ({
 }));
 
 vi.mock("@services/ChangePassword", () => ({
-    postPasswordChange: vi.fn(),
+    postPasswordChange: mocks.postPasswordChange,
 }));
 
 vi.mock("@services/PasswordPolicyConfiguration", () => ({
-    getPasswordPolicyConfiguration: vi.fn().mockResolvedValue({
+    getPasswordPolicyConfiguration: mocks.getPasswordPolicyConfiguration,
+}));
+
+beforeEach(() => {
+    mocks.getPasswordPolicyConfiguration.mockReset();
+    mocks.getPasswordPolicyConfiguration.mockResolvedValue({
         max_length: 0,
         min_length: 8,
         min_score: 0,
@@ -35,19 +45,78 @@ vi.mock("@services/PasswordPolicyConfiguration", () => ({
         require_number: false,
         require_special: false,
         require_uppercase: false,
-    }),
-}));
+    });
+    mocks.postPasswordChange.mockReset();
+    mocks.postPasswordChange.mockResolvedValue(undefined);
+});
 
-it("renders dialog with change password title when open", () => {
+it("renders preparing state without password fields", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    render(<ChangePasswordDialog username="john" open={true} setClosed={vi.fn()} />);
+    render(<ChangePasswordDialog username="john" open={true} flow="preparing" setFlow={vi.fn()} setClosed={vi.fn()} />);
     expect(screen.getByText("Change Password")).toBeInTheDocument();
+    expect(screen.getByText("Preparing password change")).toBeInTheDocument();
+    expect(screen.getByText("Checking whether additional identity verification is required")).toBeInTheDocument();
     expect(screen.getByText("Cancel")).toBeInTheDocument();
-    expect(screen.getByText("Submit")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Old Password")).not.toBeInTheDocument();
+    expect(screen.queryByText("Submit")).not.toBeInTheDocument();
+});
+
+it("renders verifying state without password fields", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<ChangePasswordDialog username="john" open={true} flow="verifying" setFlow={vi.fn()} setClosed={vi.fn()} />);
+    expect(screen.getByText("Verifying your identity")).toBeInTheDocument();
+    expect(screen.getByText("Complete identity verification to unlock the password fields")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Old Password")).not.toBeInTheDocument();
+});
+
+it("renders password fields only when ready", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<ChangePasswordDialog username="john" open={true} flow="ready" setFlow={vi.fn()} setClosed={vi.fn()} />);
+    expect(await screen.findByLabelText("Old Password")).toBeInTheDocument();
+    expect(screen.getByLabelText("New Password")).toBeInTheDocument();
+    expect(screen.getByLabelText("Repeat New Password")).toBeInTheDocument();
+    await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Change Password" })).toBeDisabled();
+    });
 });
 
 it("does not render content when closed", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    render(<ChangePasswordDialog username="john" open={false} setClosed={vi.fn()} />);
+    render(<ChangePasswordDialog username="john" open={false} flow="ready" setFlow={vi.fn()} setClosed={vi.fn()} />);
     expect(screen.queryByText("Submit")).not.toBeInTheDocument();
+});
+
+it("renders success state visibly before close", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<ChangePasswordDialog username="john" open={true} flow="success" setFlow={vi.fn()} setClosed={vi.fn()} />);
+    expect(screen.getByText("Password changed successfully")).toBeInTheDocument();
+    expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change Password" })).not.toBeInTheDocument();
+});
+
+it("shows success before closing after a successful password change", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const setClosed = vi.fn();
+    const setFlow = vi.fn();
+
+    render(<ChangePasswordDialog username="john" open={true} flow="ready" setFlow={setFlow} setClosed={setClosed} />);
+
+    fireEvent.change(await screen.findByLabelText("Old Password"), { target: { value: "old-password" } });
+    fireEvent.change(screen.getByLabelText("New Password"), { target: { value: "new-password" } });
+    fireEvent.change(screen.getByLabelText("Repeat New Password"), { target: { value: "new-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change Password" }));
+
+    await waitFor(() => {
+        expect(setFlow).toHaveBeenCalledWith("success");
+    });
+    expect(mocks.postPasswordChange).toHaveBeenCalledWith("john", "old-password", "new-password");
+    expect(setClosed).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1200);
+
+    await waitFor(() => {
+        expect(setClosed).toHaveBeenCalled();
+    });
+    vi.useRealTimers();
 });

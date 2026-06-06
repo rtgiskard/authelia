@@ -159,5 +159,11 @@
 	"Your browser does not appear to support the configuration": "Browser Anda tampaknya tidak mendukung konfigurasi",
 	"Your browser does not support the WebAuthn protocol": "Browser Anda tidak mendukung protokol WebAuthn",
 	"Your supplied password does not meet the password policy requirements": "Kata sandi yang Anda berikan tidak memenuhi persyaratan kebijakan kata sandi",
-	"Your device does not support user verification or resident keys but this was required": "Perangkat Anda tidak mendukung verifikasi pengguna atau kunci residen tetapi ini diperlukan"
+	"Your device does not support user verification or resident keys but this was required": "Perangkat Anda tidak mendukung verifikasi pengguna atau kunci residen tetapi ini diperlukan",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }

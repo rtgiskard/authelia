@@ -242,5 +242,11 @@
 	"User updated successfully": "用户更新成功",
 	"user": "用户",
 	"Your backend supports user management but does not allow listing users from this interface": "您的后端支持用户管理，但不允许从此界面列出用户",
-	"{{action}} {{username}}": "{{action}} {{username}}"
+	"{{action}} {{username}}": "{{action}} {{username}}",
+	"Checking whether additional identity verification is required": "正在检查是否需要额外的身份验证",
+	"Complete identity verification to unlock the password fields": "完成身份验证后将解锁密码输入框",
+	"Preparing password change": "正在准备更改密码",
+	"Profile": "个人资料",
+	"Update your password after verifying your identity": "完成身份验证后即可更新您的密码",
+	"Verifying your identity": "正在验证您的身份"
 }

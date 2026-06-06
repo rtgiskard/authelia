@@ -128,5 +128,11 @@
 	"You must use the code from the same device and browser that initiated the process": "Prozesua hasi zuen gailu eta nabigatzaile beretik erabili behar duzu kodea",
 	"Your browser does not appear to support the configuration": "Zure nabigatzaileak ez dirudi konfigurazioa onartzen duenik",
 	"Your browser does not support the WebAuthn protocol": "Zure nabigatzaileak ez du onartzen WebAuthn protokoloa",
-	"Your device does not support user verification or resident keys but this was required": "Zure gailuak ez du onartzen erabiltzailearen edo gako egoiliarren egiaztapena, baina hori eskatu egin da"
+	"Your device does not support user verification or resident keys but this was required": "Zure gailuak ez du onartzen erabiltzailearen edo gako egoiliarren egiaztapena, baina hori eskatu egin da",
+	"Checking whether additional identity verification is required": "Checking whether additional identity verification is required",
+	"Complete identity verification to unlock the password fields": "Complete identity verification to unlock the password fields",
+	"Preparing password change": "Preparing password change",
+	"Profile": "Profile",
+	"Update your password after verifying your identity": "Update your password after verifying your identity",
+	"Verifying your identity": "Verifying your identity"
 }
