@@ -1,14 +1,8 @@
 import axios from "axios";
 
-import {
-    ErrorResponse,
-    OKResponse,
-    ServiceResponse,
-    UserSessionElevationPath,
-    hasServiceError,
-    toData,
-    validateStatusOneTimeCode,
-} from "@services/Api";
+import type { ErrorResponse, OKResponse, ServiceResponse } from "@services/Api";
+import { UserSessionElevationPath, hasServiceError, toData, validateStatusOneTimeCode } from "@services/Api";
+import { PostWithOptionalResponseRateLimited } from "@services/Client";
 
 export interface UserSessionElevation {
     require_second_factor: boolean;
@@ -39,18 +33,7 @@ export async function getUserSessionElevation() {
 }
 
 export async function generateUserSessionElevation() {
-    const res = await axios<ServiceResponse<UserSessionElevationGenerateData>>({
-        method: "POST",
-        url: UserSessionElevationPath,
-    });
-
-    if (res.status !== 200 || hasServiceError(res).errored) {
-        throw new Error(
-            `Failed POST to ${UserSessionElevationPath}. Code: ${res.status}. Message: ${hasServiceError(res).message}`,
-        );
-    }
-
-    return toData<UserSessionElevationGenerateData>(res);
+    return PostWithOptionalResponseRateLimited<UserSessionElevationGenerateData>(UserSessionElevationPath);
 }
 
 export async function verifyUserSessionElevation(otc: string) {

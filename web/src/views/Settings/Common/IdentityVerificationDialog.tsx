@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
     Box,
@@ -16,12 +16,12 @@ import { useTranslation } from "react-i18next";
 import OneTimeCodeTextField from "@components/OneTimeCodeTextField";
 import SuccessIcon from "@components/SuccessIcon";
 import { useNotifications } from "@contexts/NotificationsContext";
+import type { UserSessionElevation } from "@services/UserSessionElevation";
 import {
     deleteUserSessionElevation,
     generateUserSessionElevation,
     verifyUserSessionElevation,
 } from "@services/UserSessionElevation";
-import type { UserSessionElevation } from "@services/UserSessionElevation";
 
 type Props = {
     elevation?: UserSessionElevation;
@@ -104,11 +104,17 @@ const IdentityVerificationDialog = (props: Props) => {
         if (codeInput === "") return;
 
         setLoading(true);
-        const success = await verifyUserSessionElevation(codeInput);
 
-        if (success) {
-            handleSuccess();
-        } else {
+        try {
+            const success = await verifyUserSessionElevation(codeInput);
+
+            if (success) {
+                handleSuccess();
+            } else {
+                handleFailure();
+            }
+        } catch (error) {
+            console.error(error);
             handleFailure();
         }
     }, [codeInput, handleFailure, handleSuccess]);
@@ -144,7 +150,16 @@ const IdentityVerificationDialog = (props: Props) => {
             .then((attempt) => {
                 if (!attempt) throw new Error("Failed to load the data.");
 
-                setCodeDelete(attempt.delete_id);
+                if (attempt.limited) {
+                    createErrorNotification(translate("You have made too many requests", { ns: "portal" }));
+                    handleClose(false);
+
+                    return;
+                }
+
+                if (!attempt.data) throw new Error("Failed to load the data.");
+
+                setCodeDelete(attempt.data.delete_id);
                 setOpen(true);
                 handleOpened();
             })

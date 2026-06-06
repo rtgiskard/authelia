@@ -211,13 +211,11 @@ func runRateLimitGC(ctx context.Context, buckets []RateLimitBucket, interval tim
 func newRateLimiterHandler(next RequestHandler, buckets []RateLimitBucket, handler RateLimitRequestHandler, exemptStatusCodes []int, disableExemption bool) RequestHandler {
 	return func(ctx *AutheliaCtx) {
 		var (
-			retryAfter   time.Duration
-			reservations []*rate.Reservation
+			retryAfter           time.Duration
+			acceptedReservations []*rate.Reservation
 		)
 
-		if !disableExemption {
-			reservations = make([]*rate.Reservation, 0, len(buckets))
-		}
+		acceptedReservations = make([]*rate.Reservation, 0, len(buckets))
 
 		now := time.Now().UTC()
 
@@ -238,12 +236,14 @@ func newRateLimiterHandler(next RequestHandler, buckets []RateLimitBucket, handl
 				continue
 			}
 
-			if !disableExemption {
-				reservations = append(reservations, reservation)
-			}
+			acceptedReservations = append(acceptedReservations, reservation)
 		}
 
 		if retryAfter > 0 {
+			for _, r := range acceptedReservations {
+				r.CancelAt(now)
+			}
+
 			handler(ctx, retryAfter)
 
 			return
@@ -256,7 +256,7 @@ func newRateLimiterHandler(next RequestHandler, buckets []RateLimitBucket, handl
 		}
 
 		if isStatusCodeExempt(ctx.Response.StatusCode(), exemptStatusCodes) {
-			for _, r := range reservations {
+			for _, r := range acceptedReservations {
 				r.CancelAt(now)
 			}
 		}

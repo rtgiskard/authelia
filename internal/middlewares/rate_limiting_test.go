@@ -366,6 +366,30 @@ func TestNewRateLimiterMultipleBuckets(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusTooManyRequests, ctx.Response.StatusCode())
 }
 
+func TestNewRateLimiterMultipleBucketsCancelsAcceptedReservationsWhenLaterBucketRejects(t *testing.T) {
+	fastBucket := NewIPRateLimitBucket(RateLimitBucketConfig{Period: time.Minute, Requests: 2})
+	slowBucket := NewIPRateLimitBucket(RateLimitBucketConfig{Period: time.Hour, Requests: 1})
+
+	handler := newRateLimiterHandler(func(ctx *AutheliaCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	}, []RateLimitBucket{fastBucket, slowBucket}, HandlerRateLimitAPI, nil, true)
+
+	ctx := newTestAutheliaCtx("10.0.0.1")
+	handler(ctx)
+	assert.Equal(t, fasthttp.StatusOK, ctx.Response.StatusCode())
+
+	ctx = newTestAutheliaCtx("10.0.0.1")
+	handler(ctx)
+	assert.Equal(t, fasthttp.StatusTooManyRequests, ctx.Response.StatusCode())
+
+	fastLimiter := fastBucket.(*IPRateLimitBucket).Fetch("10.0.0.1")
+	reservation := fastLimiter.ReserveN(time.Now().UTC(), 1)
+	require.True(t, reservation.OK())
+	defer reservation.Cancel()
+
+	assert.Zero(t, reservation.Delay())
+}
+
 func TestNewRateLimiterNilHandler(t *testing.T) {
 	middleware := NewRateLimiter(WithRateLimitErrorHandler(nil), WithRateLimitBuckets(RateLimitBucketConfig{
 		Period:   time.Minute,
