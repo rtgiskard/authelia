@@ -3,6 +3,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import SecurityView from "@views/Settings/Security/SecurityView";
 
 const mocks = vi.hoisted(() => ({
+    changePasswordDialog: vi.fn(({ flow, open }: { flow: string; open: boolean }) => (
+        <div data-flow={flow} data-open={open ? "true" : "false"} data-testid="change-password-dialog" />
+    )),
+    fetchConfiguration: vi.fn(),
+    fetchUserInfo: vi.fn(),
     getUserSessionElevation: vi.fn(),
 }));
 
@@ -22,7 +27,7 @@ vi.mock("@mui/material", async () => {
 });
 
 vi.mock("@hooks/Configuration", () => ({
-    useConfiguration: () => [{ password_change_disabled: false }, vi.fn(), false, null],
+    useConfiguration: () => [{ password_change_disabled: false }, mocks.fetchConfiguration, false, null],
 }));
 
 vi.mock("@contexts/NotificationsContext", () => ({
@@ -35,7 +40,7 @@ vi.mock("@contexts/NotificationsContext", () => ({
 vi.mock("@hooks/UserInfo", () => ({
     useUserInfoGET: () => [
         { display_name: "John Doe", emails: ["john@example.com"], groups: [] },
-        vi.fn(),
+        mocks.fetchUserInfo,
         false,
         null,
     ],
@@ -54,12 +59,16 @@ vi.mock("@views/Settings/Common/SecondFactorDialog", () => ({
 }));
 
 vi.mock("@views/Settings/Security/ChangePasswordDialog", () => ({
-    default: ({ flow, open }: { flow: string; open: boolean }) => (
-        <div data-flow={flow} data-open={open ? "true" : "false"} data-testid="change-password-dialog" />
-    ),
+    default: mocks.changePasswordDialog,
 }));
 
 beforeEach(() => {
+    mocks.changePasswordDialog.mockReset();
+    mocks.changePasswordDialog.mockImplementation(({ flow, open }: { flow: string; open: boolean }) => (
+        <div data-flow={flow} data-open={open ? "true" : "false"} data-testid="change-password-dialog" />
+    ));
+    mocks.fetchConfiguration.mockReset();
+    mocks.fetchUserInfo.mockReset();
     mocks.getUserSessionElevation.mockReset();
     mocks.getUserSessionElevation.mockResolvedValue({ elevated: false });
 });
@@ -90,5 +99,39 @@ it("opens the change password dialog immediately while preparing elevation", asy
 
     await waitFor(() => {
         expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-flow", "verifying");
+    });
+});
+
+it("does not reopen verification when the preparing flow is cancelled", async () => {
+    let resolveElevation = (_value: { elevated: boolean }) => {};
+    mocks.getUserSessionElevation.mockReturnValue(
+        new Promise((resolve) => {
+            resolveElevation = resolve;
+        }),
+    );
+
+    mocks.changePasswordDialog.mockImplementation(({ open, setClosed }: { open: boolean; setClosed: () => void }) =>
+        <button
+            data-open={open ? "true" : "false"}
+            data-testid="change-password-dialog"
+            onClick={setClosed}
+            type="button"
+        >
+            change-password-dialog
+        </button>
+    );
+
+    render(<SecurityView />);
+
+    fireEvent.click(screen.getByText("Change Password"));
+    expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-open", "true");
+
+    fireEvent.click(screen.getByTestId("change-password-dialog"));
+    expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-open", "false");
+
+    resolveElevation({ elevated: false });
+
+    await waitFor(() => {
+        expect(screen.getByTestId("change-password-dialog")).toHaveAttribute("data-open", "false");
     });
 });

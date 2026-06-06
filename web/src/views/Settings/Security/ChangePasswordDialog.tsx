@@ -119,11 +119,14 @@ const ChangePasswordDialog = (props: Props) => {
                     setLoading(false);
                 }
             } catch {
-                createErrorNotification(
-                    translate("There was an issue completing the process the verification token might have expired", {
-                        ns: "portal",
-                    }),
-                );
+                if (active) {
+                    setLoading(false);
+                    createErrorNotification(
+                        translate("There was an issue completing the process the verification token might have expired", {
+                            ns: "portal",
+                        }),
+                    );
+                }
             }
         })();
 

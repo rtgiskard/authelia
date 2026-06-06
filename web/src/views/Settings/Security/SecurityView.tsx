@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { Box, Button, Container, List, ListItem, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
@@ -53,6 +53,7 @@ const SettingsView = () => {
     const [dialogPWChangeOpening, setDialogPWChangeOpening] = useState(false);
     const [dialogPWChangeFlow, setDialogPWChangeFlow] = useState<ChangePasswordFlowState>("preparing");
     const [configuration, fetchConfiguration, , fetchConfigurationError] = useConfiguration();
+    const passwordFlowRequestRef = useRef(0);
 
     const handleResetStateOpening = useCallback(() => {
         setDialogSFOpening(false);
@@ -61,6 +62,7 @@ const SettingsView = () => {
     }, []);
 
     const handleResetState = useCallback(() => {
+        passwordFlowRequestRef.current += 1;
         handleResetStateOpening();
 
         setElevation(undefined);
@@ -150,13 +152,20 @@ const SettingsView = () => {
     };
 
     const handleElevation = () => {
+        const request = passwordFlowRequestRef.current + 1;
+        passwordFlowRequestRef.current = request;
+
         setDialogPWChangeFlow("preparing");
         handleElevationRefresh()
             .then(() => {
+                if (passwordFlowRequestRef.current !== request) return;
+
                 setDialogPWChangeFlow("verifying");
                 setDialogSFOpening(true);
             })
             .catch((error) => {
+                if (passwordFlowRequestRef.current !== request) return;
+
                 console.error(error);
                 createErrorNotification(translate("Failed to get session elevation status"));
                 handleResetState();
