@@ -167,3 +167,10 @@ type ElevatedForbiddenResponse struct {
 	FirstFactor  bool `json:"first_factor"`
 	SecondFactor bool `json:"second_factor"`
 }
+
+// AdministrationForbiddenResponse is a response for RequireAdministration.
+type AdministrationForbiddenResponse struct {
+	Session       bool `json:"session"`
+	Authorization bool `json:"authorization"`
+	UserDetails   bool `json:"user_details"`
+}

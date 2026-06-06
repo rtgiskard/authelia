@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/authelia/authelia/v4/internal/authentication"
 	"github.com/authelia/authelia/v4/internal/authorization"
 	"github.com/authelia/authelia/v4/internal/configuration/schema"
 	"github.com/authelia/authelia/v4/internal/mocks"
@@ -270,6 +272,91 @@ func (s *ConfigurationHandlerFixture) TestDisablePasswordResetChangeOptions() {
 			})
 		})
 	}
+}
+
+func (s *ConfigurationHandlerFixture) TestAdministrationEnabledForConfiguredUser() {
+	userSession, err := s.mock.Ctx.GetSession()
+	s.Require().NoError(err)
+
+	userSession.Username = "john"
+	s.Require().NoError(s.mock.Ctx.SaveSession(userSession))
+
+	s.mock.Ctx.Configuration.Administration = schema.Administration{Enable: true, Users: []string{"john"}}
+
+	ConfigurationGET(s.mock.Ctx)
+
+	s.mock.Assert200OK(s.T(), configurationBody{
+		AdministrationEnabled: true,
+		AvailableMethods:      []string{},
+	})
+}
+
+func (s *ConfigurationHandlerFixture) TestAdministrationDisabledWhenControlPlaneDisabled() {
+	userSession, err := s.mock.Ctx.GetSession()
+	s.Require().NoError(err)
+
+	userSession.Username = "john"
+	s.Require().NoError(s.mock.Ctx.SaveSession(userSession))
+
+	s.mock.Ctx.Configuration.Administration = schema.Administration{Enable: false, Users: []string{"john"}}
+
+	ConfigurationGET(s.mock.Ctx)
+
+	s.mock.Assert200OK(s.T(), configurationBody{
+		AvailableMethods: []string{},
+	})
+}
+
+func (s *ConfigurationHandlerFixture) TestAdministrationEnabledForConfiguredGroup() {
+	userSession, err := s.mock.Ctx.GetSession()
+	s.Require().NoError(err)
+
+	userSession.Username = "john"
+	s.Require().NoError(s.mock.Ctx.SaveSession(userSession))
+
+	s.mock.Ctx.Configuration.Administration = schema.Administration{Enable: true, Groups: []string{"admins"}}
+	s.mock.UserProviderMock.EXPECT().GetDetails("john").Return(&authentication.UserDetails{Username: "john", Groups: []string{"admins"}}, nil)
+
+	ConfigurationGET(s.mock.Ctx)
+
+	s.mock.Assert200OK(s.T(), configurationBody{
+		AdministrationEnabled: true,
+		AvailableMethods:      []string{},
+	})
+}
+
+func (s *ConfigurationHandlerFixture) TestAdministrationDisabledForUnconfiguredGroup() {
+	userSession, err := s.mock.Ctx.GetSession()
+	s.Require().NoError(err)
+
+	userSession.Username = "john"
+	s.Require().NoError(s.mock.Ctx.SaveSession(userSession))
+
+	s.mock.Ctx.Configuration.Administration = schema.Administration{Enable: true, Groups: []string{"admins"}}
+	s.mock.UserProviderMock.EXPECT().GetDetails("john").Return(&authentication.UserDetails{Username: "john", Groups: []string{"users"}}, nil)
+
+	ConfigurationGET(s.mock.Ctx)
+
+	s.mock.Assert200OK(s.T(), configurationBody{
+		AvailableMethods: []string{},
+	})
+}
+
+func (s *ConfigurationHandlerFixture) TestAdministrationDisabledWhenUserDetailsLookupFails() {
+	userSession, err := s.mock.Ctx.GetSession()
+	s.Require().NoError(err)
+
+	userSession.Username = "john"
+	s.Require().NoError(s.mock.Ctx.SaveSession(userSession))
+
+	s.mock.Ctx.Configuration.Administration = schema.Administration{Enable: true, Groups: []string{"admins"}}
+	s.mock.UserProviderMock.EXPECT().GetDetails("john").Return(nil, errors.New("lookup failed"))
+
+	ConfigurationGET(s.mock.Ctx)
+
+	s.mock.Assert200OK(s.T(), configurationBody{
+		AvailableMethods: []string{},
+	})
 }
 
 func TestRunSuite(t *testing.T) {

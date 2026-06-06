@@ -3,23 +3,16 @@ package middlewares
 import (
 	"slices"
 
-	"github.com/authelia/authelia/v4/internal/authentication"
+	"github.com/valyala/fasthttp"
 )
 
-// RequireAdministration requires an explicitly configured administrator subject with two-factor authentication.
+// RequireAdministration requires an explicitly configured administrator subject.
 func RequireAdministration(next RequestHandler) RequestHandler {
 	return func(ctx *AutheliaCtx) {
 		userSession, err := ctx.GetSession()
 		if err != nil {
-			ctx.Logger.WithError(err).Warn("Denied administrator control plane access due to insufficient authentication")
-			ctx.ReplyForbidden()
-
-			return
-		}
-
-		if userSession.AuthenticationLevel(ctx.Configuration.WebAuthn.EnablePasskey2FA) < authentication.TwoFactor {
-			ctx.Logger.WithField("username", userSession.Username).Warn("Denied administrator control plane access due to insufficient authentication")
-			ctx.ReplyForbidden()
+			ctx.Logger.WithError(err).Warn("Denied administrator control plane access due to missing administrator session")
+			replyAdministrationForbidden(ctx, AdministrationForbiddenResponse{Session: true})
 
 			return
 		}
@@ -32,7 +25,7 @@ func RequireAdministration(next RequestHandler) RequestHandler {
 
 		if len(ctx.Configuration.Administration.Groups) == 0 {
 			ctx.Logger.WithField("username", userSession.Username).Warn("Denied administrator control plane access due to missing administrator authorization")
-			ctx.ReplyForbidden()
+			replyAdministrationForbidden(ctx, AdministrationForbiddenResponse{Authorization: true})
 
 			return
 		}
@@ -40,7 +33,7 @@ func RequireAdministration(next RequestHandler) RequestHandler {
 		details, err := ctx.Providers.UserProvider.GetDetails(userSession.Username)
 		if err != nil {
 			ctx.Logger.WithError(err).WithField("username", userSession.Username).Warn("Denied administrator control plane access due to user details lookup failure")
-			ctx.ReplyForbidden()
+			replyAdministrationForbidden(ctx, AdministrationForbiddenResponse{UserDetails: true})
 
 			return
 		}
@@ -52,7 +45,13 @@ func RequireAdministration(next RequestHandler) RequestHandler {
 		}
 
 		ctx.Logger.WithField("username", userSession.Username).Warn("Denied administrator control plane access due to missing administrator authorization")
-		ctx.ReplyForbidden()
+		replyAdministrationForbidden(ctx, AdministrationForbiddenResponse{Authorization: true})
+	}
+}
+
+func replyAdministrationForbidden(ctx *AutheliaCtx, data AdministrationForbiddenResponse) {
+	if err := ctx.ReplyJSON(OKResponse{Status: "KO", Data: data}, fasthttp.StatusForbidden); err != nil {
+		ctx.Logger.WithError(err).Error("Error occurred encoding JSON response during an administration authorization check.")
 	}
 }
 

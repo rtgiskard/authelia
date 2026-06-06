@@ -258,11 +258,14 @@ func TestRequireElevated(t *testing.T) {
 
 func TestRequireAdministration(t *testing.T) {
 	testCases := []struct {
-		name     string
-		level    authentication.Level
-		config   schema.Administration
-		setup    func(mock *mocks.MockAutheliaCtx)
-		expected int
+		name                  string
+		level                 authentication.Level
+		config                schema.Administration
+		setup                 func(mock *mocks.MockAutheliaCtx)
+		expected              int
+		expectedSession       bool
+		expectedAuthorization bool
+		expectedUserDetails   bool
 	}{
 		{
 			"ShouldDenyAnonymousUser",
@@ -270,29 +273,31 @@ func TestRequireAdministration(t *testing.T) {
 			schema.Administration{Enable: true, Users: []string{john}},
 			nil,
 			fasthttp.StatusForbidden,
+			false,
+			true,
+			false,
 		},
 		{
-			"ShouldDenyOneFactorUser",
+			"ShouldAllowConfiguredOneFactorUser",
 			authentication.OneFactor,
 			schema.Administration{Enable: true, Users: []string{john}},
 			nil,
-			fasthttp.StatusForbidden,
-		},
-		{
-			"ShouldAllowConfiguredUserWithTwoFactors",
-			authentication.TwoFactor,
-			schema.Administration{Enable: true, Users: []string{john}},
-			nil,
 			fasthttp.StatusOK,
+			false,
+			false,
+			false,
 		},
 		{
-			"ShouldAllowConfiguredGroupWithTwoFactors",
-			authentication.TwoFactor,
+			"ShouldAllowConfiguredGroup",
+			authentication.OneFactor,
 			schema.Administration{Enable: true, Groups: []string{"admins"}},
 			func(mock *mocks.MockAutheliaCtx) {
 				mock.UserProviderMock.EXPECT().GetDetails(john).Return(&authentication.UserDetails{Username: john, Groups: []string{"admins"}}, nil)
 			},
 			fasthttp.StatusOK,
+			false,
+			false,
+			false,
 		},
 		{
 			"ShouldDenyUnconfiguredUserWithTwoFactors",
@@ -302,6 +307,9 @@ func TestRequireAdministration(t *testing.T) {
 				mock.UserProviderMock.EXPECT().GetDetails(john).Return(&authentication.UserDetails{Username: john, Groups: []string{"users"}}, nil)
 			},
 			fasthttp.StatusForbidden,
+			false,
+			true,
+			false,
 		},
 		{
 			"ShouldDenyWhenNoAdministratorsConfigured",
@@ -309,6 +317,9 @@ func TestRequireAdministration(t *testing.T) {
 			schema.Administration{Enable: true},
 			nil,
 			fasthttp.StatusForbidden,
+			false,
+			true,
+			false,
 		},
 		{
 			"ShouldDenyWhenUserDetailsLookupFails",
@@ -318,6 +329,9 @@ func TestRequireAdministration(t *testing.T) {
 				mock.UserProviderMock.EXPECT().GetDetails(john).Return(nil, errors.New("lookup failed"))
 			},
 			fasthttp.StatusForbidden,
+			false,
+			false,
+			true,
 		},
 	}
 
@@ -360,6 +374,116 @@ func TestRequireAdministration(t *testing.T) {
 
 			if tc.expected == fasthttp.StatusOK {
 				assert.Equal(t, "Example Nil", string(mock.Ctx.Response.Body()))
+			} else {
+				data := &struct {
+					Status string                                      `json:"status"`
+					Data   middlewares.AdministrationForbiddenResponse `json:"data"`
+				}{}
+
+				require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), data))
+
+				assert.Equal(t, tc.expectedSession, data.Data.Session)
+				assert.Equal(t, tc.expectedAuthorization, data.Data.Authorization)
+				assert.Equal(t, tc.expectedUserDetails, data.Data.UserDetails)
+			}
+		})
+	}
+}
+
+func TestRequireElevatedAdministrationChain(t *testing.T) {
+	type elevation struct {
+		expires time.Duration
+		ip      net.IP
+	}
+
+	testCases := []struct {
+		name              string
+		config            schema.Administration
+		elevation         *elevation
+		setup             func(mock *mocks.MockAutheliaCtx)
+		expected          int
+		expectedElevation bool
+	}{
+		{
+			"ShouldAllowElevatedConfiguredOneFactorUser",
+			schema.Administration{Enable: true, Users: []string{john}},
+			&elevation{time.Minute, net.ParseIP("127.0.0.1")},
+			nil,
+			fasthttp.StatusOK,
+			false,
+		},
+		{
+			"ShouldRequireElevationForConfiguredOneFactorUser",
+			schema.Administration{Enable: true, Users: []string{john}},
+			nil,
+			nil,
+			fasthttp.StatusForbidden,
+			true,
+		},
+		{
+			"ShouldDenyElevatedUnconfiguredOneFactorUser",
+			schema.Administration{Enable: true, Groups: []string{"admins"}},
+			&elevation{time.Minute, net.ParseIP("127.0.0.1")},
+			func(mock *mocks.MockAutheliaCtx) {
+				mock.UserProviderMock.EXPECT().GetDetails(john).Return(&authentication.UserDetails{Username: john, Groups: []string{"users"}}, nil)
+			},
+			fasthttp.StatusForbidden,
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := mocks.NewMockAutheliaCtx(t)
+
+			defer mock.Close()
+
+			mock.Ctx.Configuration.Administration = tc.config
+			mock.Ctx.Configuration.IdentityValidation.ElevatedSession = schema.IdentityValidationElevatedSession{
+				CodeLifespan:      time.Minute,
+				ElevationLifespan: time.Minute,
+				Characters:        8,
+			}
+			mock.Ctx.Providers.Clock = &mock.Clock
+			mock.Ctx.Request.Header.Set(fasthttp.HeaderXForwardedFor, "127.0.0.1")
+
+			userSession, err := mock.Ctx.GetSession()
+			require.NoError(t, err)
+
+			userSession.Username = john
+			userSession.AuthenticationMethodRefs.UsernameAndPassword = true
+			userSession.AuthenticationMethodRefs.WebAuthn = false
+
+			if tc.elevation != nil {
+				userSession.Elevations.User = &session.Elevation{
+					ID:       1,
+					Expires:  mock.Clock.Now().Add(tc.elevation.expires),
+					RemoteIP: tc.elevation.ip,
+				}
+			}
+
+			require.NoError(t, mock.Ctx.SaveSession(userSession))
+
+			if tc.setup != nil {
+				tc.setup(mock)
+			}
+
+			handler := middlewares.RequireElevated(middlewares.RequireAdministration(NilHandler))
+
+			handler(mock.Ctx)
+
+			assert.Equal(t, tc.expected, mock.Ctx.Response.StatusCode())
+
+			if tc.expected == fasthttp.StatusOK {
+				assert.Equal(t, "Example Nil", string(mock.Ctx.Response.Body()))
+			} else if tc.expectedElevation {
+				data := &struct {
+					Status string                                `json:"status"`
+					Data   middlewares.ElevatedForbiddenResponse `json:"data"`
+				}{}
+
+				require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), data))
+				assert.True(t, data.Data.Elevation)
 			}
 		})
 	}
