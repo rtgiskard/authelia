@@ -1,6 +1,10 @@
 ---
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
 title: "Dashboard / Control Panel and CLI for Administrators"
-description: "Authelia Administrator Dashboard."
+description: "The Authelia roadmap item for an administrator dashboard, control panel, and CLI allowing dynamic management of configuration, users, and access control rules."
 summary: "A dashboard or control panel for administrators to adjust system settings is easily one of the most impactful features we can implement."
 date: 2024-03-21T18:25:55+11:00
 draft: false
@@ -135,7 +139,9 @@ Manage Access Control rules.
 
 {{< roadmap-status >}}
 
-Manage user accounts with the file authentication backend first, including creation, modification, enablement,
-disablement, and password reset. LDAP-backed accounts are treated as read-only for the initial implementation except for
-existing supported password reset flows, with broader LDAP write support reserved for a later design.
+Manage user accounts with either the internal or LDAP authentication backends. Allow for creation, modification, and
+deletion.
 
+In this fork, administrator user management targets the file authentication backend: creation, modification, deletion,
+enablement, disablement, and password reset. LDAP is not supported for administrator user management; see
+[Fork Notes](https://github.com/rtgiskard/authelia/blob/dev/FORK.md) for the fork-specific scope.

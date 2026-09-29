@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package mocks
 
 import (
@@ -19,6 +23,7 @@ import (
 	"github.com/authelia/authelia/v4/internal/authorization"
 	"github.com/authelia/authelia/v4/internal/clock"
 	"github.com/authelia/authelia/v4/internal/configuration/schema"
+	"github.com/authelia/authelia/v4/internal/expression"
 	"github.com/authelia/authelia/v4/internal/middlewares"
 	"github.com/authelia/authelia/v4/internal/random"
 	"github.com/authelia/authelia/v4/internal/regulation"
@@ -51,7 +56,13 @@ func NewMockAutheliaCtx(t *testing.T) *MockAutheliaCtx {
 	datetime, _ := time.Parse("2006-Jan-02", "2013-Feb-03")
 	mockAuthelia.Clock.Set(datetime)
 
-	config := schema.Configuration{}
+	config := schema.Configuration{
+		IdentityValidation: schema.IdentityValidation{
+			ResetPassword: schema.IdentityValidationResetPassword{
+				JWTAlgorithm: "HS256",
+			},
+		},
+	}
 
 	config.Session.Cookies = []schema.SessionCookie{
 		{
@@ -202,6 +213,8 @@ func NewMockAutheliaCtx(t *testing.T) *MockAutheliaCtx {
 
 	providers.Authorizer = authorization.NewAuthorizer(
 		&config)
+
+	providers.UserAttributeResolver = expression.NewUserAttributes(&config)
 
 	providers.SessionProvider = session.NewProvider(config.Session, nil)
 

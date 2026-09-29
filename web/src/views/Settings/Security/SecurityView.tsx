@@ -1,8 +1,14 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
-import { Box, Button, Container, List, ListItem, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
+import { Button } from "@components/UI/Button";
+import { Card } from "@components/UI/Card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@components/UI/Tooltip";
 import { useNotifications } from "@contexts/NotificationsContext";
 import { useConfiguration } from "@hooks/Configuration";
 import { useUserInfoGET } from "@hooks/UserInfo";
@@ -23,8 +29,8 @@ const PasswordChangeButton = ({ configuration, handleChangePassword, translate }
     const buttonContent = (
         <Button
             id="change-password-button"
-            variant="contained"
-            sx={{ p: 1, width: "100%" }}
+            variant="default"
+            className="p-2 w-full"
             onClick={handleChangePassword}
             disabled={!configuration || configuration.password_change_disabled}
         >
@@ -33,9 +39,12 @@ const PasswordChangeButton = ({ configuration, handleChangePassword, translate }
     );
 
     return !configuration || configuration.password_change_disabled ? (
-        <Tooltip title={translate("This is disabled by your administrator")}>
-            <Box component={"span"}>{buttonContent}</Box>
-        </Tooltip>
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger render={<span>{buttonContent}</span>} />
+                <TooltipContent>{translate("This is disabled by your administrator")}</TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
     ) : (
         buttonContent
     );
@@ -218,60 +227,43 @@ const SettingsView = () => {
                 }}
             />
 
-            <Container
-                maxWidth="md"
-                sx={{
-                    alignItems: "flex-start",
-                    display: "flex",
-                    justifyContent: "center",
-                    minHeight: "100vh",
-                    pb: 4,
-                    pt: 8,
-                }}
-            >
-                <Stack spacing={3} sx={{ width: "100%" }}>
-                    <Paper variant="outlined" sx={{ p: { md: 3, xs: 2 } }}>
-                        <Stack spacing={2}>
-                            <Typography variant="h6">{translate("Profile")}</Typography>
-                            <Box>
-                                <Typography variant="body2" color="text.secondary">
-                                    {translate("Name")}
-                                </Typography>
-                                <Typography>{userInfo?.display_name || ""}</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="body2" color="text.secondary">
-                                    {translate("Email")}
-                                </Typography>
-                                <Typography>{userInfo?.emails?.[0] || ""}</Typography>
+            <div className="flex items-start justify-center h-screen pt-16">
+                <Card className="flex items-center justify-center h-auto">
+                    <div className="flex flex-col gap-4 m-4 w-full">
+                        <div className="p-2 md:p-6">
+                            <div className="border border-muted-foreground/50 rounded mb-2 p-2.5 w-full">
+                                <p>
+                                    {translate("Name")}: {userInfo?.display_name || ""}
+                                </p>
+                            </div>
+                            <div className="border border-muted-foreground/50 rounded mb-2 p-2.5 w-full">
+                                <div className="flex items-center">
+                                    <p className="mr-2">{translate("Email")}:</p>
+                                    <p>{userInfo?.emails?.[0] || ""}</p>
+                                </div>
                                 {userInfo?.emails && userInfo.emails.length > 1 && (
-                                    <List sx={{ p: 0, pl: 2, width: "100%" }}>
+                                    <ul className="p-0 pl-8 w-full">
+                                        {" "}
                                         {userInfo.emails.slice(1).map((email: string) => (
-                                            <ListItem key={email} sx={{ py: 0 }}>
-                                                <Typography>{email}</Typography>
-                                            </ListItem>
+                                            <li key={email} className="py-0">
+                                                <p>{email}</p>
+                                            </li>
                                         ))}
-                                    </List>
+                                    </ul>
                                 )}
-                            </Box>
-                        </Stack>
-                    </Paper>
-                    <Paper variant="outlined" sx={{ p: { md: 3, xs: 2 } }}>
-                        <Stack spacing={2}>
-                            <Typography variant="h6">{translate("Password")}</Typography>
-                            <Typography>{translate("Password")}: ●●●●●●●●</Typography>
-                            <Typography color="text.secondary">
-                                {translate("Update your password after verifying your identity")}
-                            </Typography>
+                            </div>
+                            <div className="border border-muted-foreground/50 rounded mb-2 p-2.5">
+                                <p>{translate("Password")}: ●●●●●●●●</p>
+                            </div>
                             <PasswordChangeButton
                                 configuration={configuration}
                                 translate={translate}
                                 handleChangePassword={handleChangePassword}
                             />
-                        </Stack>
-                    </Paper>
-                </Stack>
-            </Container>
+                        </div>
+                    </div>
+                </Card>
+            </div>
         </Fragment>
     );
 };

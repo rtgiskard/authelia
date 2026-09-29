@@ -1,4 +1,8 @@
-FROM haproxy:3.4.0-alpine@sha256:f5437564f819793be4614085ee0bafae45d0579fa2b97f9c76449e60436476e0
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
+FROM haproxy:3.4.5-alpine@sha256:7ffdd3845020aa4c97ffaa56c8cab3ad473ecae0b8ea5e55d2378d663755e092
 USER root
 
 RUN \

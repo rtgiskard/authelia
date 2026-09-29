@@ -17,9 +17,9 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/rtgiskard/authelia
-  NODE_VERSION: "22.13.1"
-  PNPM_VERSION: "11"
-  SWAGGER_UI_VERSION: "5.32.6"
+  NODE_VERSION: "26"
+  PNPM_VERSION: "12.6.0"
+  SWAGGER_UI_VERSION: "5.33.0"
 
 jobs:
   pull-request:
@@ -147,7 +147,7 @@ jobs:
       - name: Build frontend assets like authelia-scripts build
         working-directory: web
         run: |
-          pnpm install --ignore-scripts
+          pnpm install --frozen-lockfile --ignore-scripts
           pnpm build
 
       - name: Build Swagger UI assets like authelia-scripts build

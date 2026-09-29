@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"mime"
 	"net/mail"
 	"strings"
@@ -37,7 +36,8 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 	body := adminCreateUserRequestBody{}
 
 	if err := ctx.ParseBody(&body); err != nil {
-		ctx.Error(err, messageUnableToCreateUser)
+		ctx.GetLogger().WithError(err).Error(messageUnableToCreateUser)
+		ctx.SetJSONError(messageUnableToCreateUser)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 
 		return
@@ -68,7 +68,8 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 	}
 
 	if err := ctx.Providers.PasswordPolicy.Check(password); err != nil {
-		ctx.Error(err, messagePasswordWeak)
+		ctx.GetLogger().WithError(err).Debug(messagePasswordWeak)
+		ctx.SetJSONError(messagePasswordWeak)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 
 		return
@@ -151,7 +152,8 @@ func AdminUserPATCH(ctx *middlewares.AutheliaCtx) {
 	body := adminUpdateUserRequestBody{}
 
 	if err := ctx.ParseBody(&body); err != nil {
-		ctx.Error(err, messageUnableToUpdateUser)
+		ctx.GetLogger().WithError(err).Error(messageUnableToUpdateUser)
+		ctx.SetJSONError(messageUnableToUpdateUser)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
@@ -206,7 +208,8 @@ func AdminUserPasswordPUT(ctx *middlewares.AutheliaCtx) {
 	body := adminResetPasswordRequestBody{}
 
 	if err := ctx.ParseBody(&body); err != nil {
-		ctx.Error(err, messageUnableToResetUserPassword)
+		ctx.GetLogger().WithError(err).Error(messageUnableToResetUserPassword)
+		ctx.SetJSONError(messageUnableToResetUserPassword)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
@@ -225,7 +228,8 @@ func AdminUserPasswordPUT(ctx *middlewares.AutheliaCtx) {
 	}
 
 	if err := ctx.Providers.PasswordPolicy.Check(body.Password); err != nil {
-		ctx.Error(err, messagePasswordWeak)
+		ctx.GetLogger().WithError(err).Debug(messagePasswordWeak)
+		ctx.SetJSONError(messagePasswordWeak)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
@@ -417,7 +421,8 @@ func adminHandleGeneratedPasswordError(ctx *middlewares.AutheliaCtx, err error, 
 		return
 	}
 
-	ctx.Error(fmt.Errorf("%s: %w", strings.TrimSuffix(fallback, "."), err), fallback)
+	ctx.GetLogger().WithError(err).Error(fallback)
+	ctx.SetJSONError(fallback)
 	ctx.SetStatusCode(fasthttp.StatusBadRequest)
 }
 
@@ -496,7 +501,8 @@ func handleAdminUserProviderError(ctx *middlewares.AutheliaCtx, err error, fallb
 		ctx.SetJSONError(messagePasswordWeak)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 	default:
-		ctx.Error(fmt.Errorf("%s: %w", strings.TrimSuffix(fallback, "."), err), fallback)
+		ctx.GetLogger().WithError(err).Error(fallback)
+		ctx.SetJSONError(fallback)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 	}
 }

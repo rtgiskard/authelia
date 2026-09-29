@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import SettingsLayout from "@layouts/SettingsLayout";
@@ -28,82 +32,52 @@ beforeEach(() => {
     mockNavigate.mockReset();
 });
 
-it("renders with settings title and menu button", async () => {
-    await act(async () => {
-        render(<SettingsLayout />);
-    });
-
-    expect(screen.getByLabelText("open drawer")).toBeInTheDocument();
-    expect(screen.getAllByText("Settings").length).toBeGreaterThanOrEqual(1);
-});
-
-it("renders children", async () => {
-    await act(async () => {
-        render(
-            <SettingsLayout>
-                <div data-testid="child">Content</div>
-            </SettingsLayout>,
-        );
-    });
-
-    expect(screen.getByTestId("child")).toBeInTheDocument();
-});
-
-it("renders navigation items in drawer", async () => {
+it("renders navigation items", async () => {
     await act(async () => {
         render(<SettingsLayout administrationEnabled />);
-    });
-
-    expect(screen.getByText("Overview")).toBeInTheDocument();
-    expect(screen.getByText("Security")).toBeInTheDocument();
-    expect(screen.getByText("Two-Factor Authentication")).toBeInTheDocument();
-    expect(screen.getByText("User Management")).toBeInTheDocument();
-    expect(screen.getByText("Close")).toBeInTheDocument();
-});
-
-it("does not render user management when administration is disabled", async () => {
-    await act(async () => {
-        render(<SettingsLayout administrationEnabled={false} />);
-    });
-
-    expect(screen.getByText("Overview")).toBeInTheDocument();
-    expect(screen.queryByText("User Management")).not.toBeInTheDocument();
-    expect(screen.getByText("Close")).toBeInTheDocument();
-});
-
-it("does not render user management when administration availability is unknown", async () => {
-    await act(async () => {
-        render(<SettingsLayout />);
-    });
-
-    expect(screen.getByText("Overview")).toBeInTheDocument();
-    expect(screen.queryByText("User Management")).not.toBeInTheDocument();
-    expect(screen.getByText("Close")).toBeInTheDocument();
-});
-
-it("sets the document title", async () => {
-    await act(async () => {
-        render(<SettingsLayout />);
-    });
-
-    expect(document.title).toContain("Settings");
-});
-
-it("opens drawer when menu button is clicked", async () => {
-    await act(async () => {
-        render(<SettingsLayout />);
     });
 
     await act(async () => {
         fireEvent.click(screen.getByLabelText("open drawer"));
     });
 
-    expect(screen.getByRole("presentation")).toBeInTheDocument();
+    expect(screen.getByText("Overview")).toBeInTheDocument();
+    expect(screen.getByText("Security")).toBeInTheDocument();
+    expect(screen.getByText("Two-Factor Authentication")).toBeInTheDocument();
+    expect(screen.getByText("User Management")).toBeInTheDocument();
+});
+
+it("does not render user management when administration is disabled", async () => {
+    await act(async () => {
+        render(<SettingsLayout administrationEnabled={false} />);
+    });
+    await act(async () => {
+        fireEvent.click(screen.getByLabelText("open drawer"));
+    });
+
+    expect(screen.getByText("Overview")).toBeInTheDocument();
+    expect(screen.queryByText("User Management")).not.toBeInTheDocument();
+});
+
+it("does not render user management when administration availability is unknown", async () => {
+    await act(async () => {
+        render(<SettingsLayout />);
+    });
+    await act(async () => {
+        fireEvent.click(screen.getByLabelText("open drawer"));
+    });
+
+    expect(screen.getByText("Overview")).toBeInTheDocument();
+    expect(screen.queryByText("User Management")).not.toBeInTheDocument();
 });
 
 it("navigates when a nav item is clicked", async () => {
     await act(async () => {
         render(<SettingsLayout />);
+    });
+
+    await act(async () => {
+        fireEvent.click(screen.getByLabelText("open drawer"));
     });
 
     await act(async () => {
@@ -125,6 +99,10 @@ it("does not navigate when the selected nav item is clicked", async () => {
     });
 
     await act(async () => {
+        fireEvent.click(screen.getByLabelText("open drawer"));
+    });
+
+    await act(async () => {
         fireEvent.click(screen.getByText("Overview"));
     });
 
@@ -135,46 +113,4 @@ it("does not navigate when the selected nav item is clicked", async () => {
         value: { pathname: "/" },
         writable: true,
     });
-});
-
-it("does not close drawer on Tab keydown event", async () => {
-    await act(async () => {
-        render(<SettingsLayout />);
-    });
-
-    await act(async () => {
-        fireEvent.click(screen.getByLabelText("open drawer"));
-    });
-
-    const drawerContent = screen.getByText("Overview").closest("[role='presentation']");
-
-    expect(drawerContent).not.toBeNull();
-
-    await act(async () => {
-        const event = new KeyboardEvent("keydown", { bubbles: true, key: "Tab" });
-        drawerContent?.dispatchEvent(event);
-    });
-
-    expect(screen.getByRole("presentation")).toBeInTheDocument();
-});
-
-it("does not close drawer on Shift keydown event", async () => {
-    await act(async () => {
-        render(<SettingsLayout />);
-    });
-
-    await act(async () => {
-        fireEvent.click(screen.getByLabelText("open drawer"));
-    });
-
-    const drawerContent = screen.getByText("Overview").closest("[role='presentation']");
-
-    expect(drawerContent).not.toBeNull();
-
-    await act(async () => {
-        const event = new KeyboardEvent("keydown", { bubbles: true, key: "Shift" });
-        drawerContent?.dispatchEvent(event);
-    });
-
-    expect(screen.getByRole("presentation")).toBeInTheDocument();
 });

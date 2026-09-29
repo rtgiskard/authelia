@@ -9,46 +9,38 @@ import {
     useState,
 } from "react";
 
-import { Add, Delete, Edit, LockReset, Person, PersonOff, Refresh, Search } from "@mui/icons-material";
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardActions,
-    CardContent,
-    Checkbox,
-    Chip,
-    CircularProgress,
-    Container,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    FormControlLabel,
-    IconButton,
-    InputAdornment,
-    Paper,
-    Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TableSortLabel,
-    TextField,
-    Tooltip,
-    Typography,
-    useMediaQuery,
-} from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
 import axios from "axios";
+import {
+    ChevronLeft,
+    ChevronRight,
+    KeyRound,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Search,
+    Trash2,
+    UserRound,
+    UserRoundX,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import PasswordMeter from "@components/PasswordMeter";
+import { Alert, AlertDescription } from "@components/UI/Alert";
+import { Button } from "@components/UI/Button";
+import { Card, CardContent, CardFooter } from "@components/UI/Card";
+import { Checkbox } from "@components/UI/Checkbox";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@components/UI/Dialog";
+import { Input } from "@components/UI/Input";
+import { Label } from "@components/UI/Label";
+import { Spinner } from "@components/UI/Spinner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@components/UI/Tooltip";
 import { useNotifications } from "@contexts/NotificationsContext";
 import { useUserInfoGET } from "@hooks/UserInfo";
 import { type PasswordPolicyConfiguration, PasswordPolicyMode } from "@models/PasswordPolicy";
@@ -277,8 +269,16 @@ const UserManagementView = () => {
     const { t: translate } = useTranslation("settings");
     const { createErrorNotification, createInfoNotification, createSuccessNotification, createWarnNotification } =
         useNotifications();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+    const [isMobile, setIsMobile] = useState(() => globalThis.matchMedia("(max-width: 899px)").matches);
+
+    useEffect(() => {
+        const media = globalThis.matchMedia("(max-width: 899px)");
+        const update = () => setIsMobile(media.matches);
+
+        media.addEventListener?.("change", update);
+
+        return () => media.removeEventListener?.("change", update);
+    }, []);
 
     const [userInfo, fetchUserInfo, , fetchUserInfoError] = useUserInfoGET();
 
@@ -620,7 +620,7 @@ const UserManagementView = () => {
         setPage(nextPage);
     };
 
-    const handleChangeRowsPerPage = (event: ChangeEvent<HTMLInputElement>) => {
+    const handleChangeRowsPerPage = (event: ChangeEvent<HTMLSelectElement>) => {
         setRowsPerPage(Number.parseInt(event.target.value, 10));
         setPage(0);
     };
@@ -1056,50 +1056,22 @@ const UserManagementView = () => {
                 })}
             />
 
-            <Container
-                sx={{
-                    alignItems: "flex-start",
-                    display: "flex",
-                    justifyContent: "center",
-                    pb: 6,
-                    pt: { md: 4, xs: 2 },
-                    px: { md: 3, xs: 1.5 },
-                }}
-            >
-                <Paper
-                    variant="outlined"
-                    sx={{
-                        borderColor: alpha(theme.palette.divider, 0.32),
-                        borderRadius: 3,
-                        boxShadow: `0 20px 56px ${alpha(theme.palette.common.black, 0.035)}`,
-                        overflow: "hidden",
-                        width: "100%",
-                    }}
-                >
-                    <Box
-                        sx={{
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.28)}`,
-                            p: { md: 4, xs: 2.75 },
-                        }}
-                    >
-                        <Stack spacing={1}>
-                            <Typography fontWeight={600} variant="h4">
-                                {translate("User Management")}
-                            </Typography>
-                            <Typography color="text.secondary" sx={{ maxWidth: 720 }}>
-                                {translate("Manage users in the configured authentication backend")}
-                            </Typography>
-                        </Stack>
-                    </Box>
+            <div className="flex w-full items-start justify-center px-3 pt-4 pb-12 md:px-6 md:pt-8">
+                <div className="w-full overflow-hidden rounded-xl border bg-card shadow-sm">
+                    <header className="border-b p-6 md:p-8">
+                        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+                            {translate("User Management")}
+                        </h1>
+                        <p className="mt-2 max-w-3xl text-muted-foreground">
+                            {translate("Manage users in the configured authentication backend")}
+                        </p>
+                    </header>
 
-                    <Stack spacing={2.5} sx={{ p: { md: 4, xs: 2.5 } }}>
+                    <div className="flex flex-col gap-6 p-5 md:p-8">
                         {capabilitiesLoading ? (
                             <CenteredState
                                 action={
-                                    <CircularProgress
-                                        aria-label={translate("Loading user management capabilities")}
-                                        size={28}
-                                    />
+                                    <Spinner aria-label={translate("Loading user management capabilities")} size={28} />
                                 }
                                 description={translate("Checking which user management features are available")}
                                 title={translate("Loading User Management")}
@@ -1118,7 +1090,8 @@ const UserManagementView = () => {
                         {!capabilitiesLoading && capabilitiesError ? (
                             <CenteredState
                                 action={
-                                    <Button onClick={handleCapabilityRetry} startIcon={<Refresh />} variant="contained">
+                                    <Button onClick={handleCapabilityRetry}>
+                                        <RefreshCw />
                                         {translate("Retry")}
                                     </Button>
                                 }
@@ -1132,7 +1105,8 @@ const UserManagementView = () => {
                         {!capabilitiesLoading && !capabilitiesError && elevationCancelled ? (
                             <CenteredState
                                 action={
-                                    <Button onClick={handleCapabilityRetry} startIcon={<Refresh />} variant="contained">
+                                    <Button onClick={handleCapabilityRetry}>
+                                        <RefreshCw />
                                         {translate("Verify")}
                                     </Button>
                                 }
@@ -1157,8 +1131,10 @@ const UserManagementView = () => {
                         {!capabilitiesInitialized ? null : !capabilitiesLoading && !capabilitiesError && isSupported ? (
                             <Fragment>
                                 {readOnlyNotice ? (
-                                    <Alert severity="info">
-                                        {translate("User Management is currently available in read-only mode")}
+                                    <Alert>
+                                        <AlertDescription>
+                                            {translate("User Management is currently available in read-only mode")}
+                                        </AlertDescription>
                                     </Alert>
                                 ) : null}
 
@@ -1171,84 +1147,42 @@ const UserManagementView = () => {
                                     />
                                 ) : (
                                     <Fragment>
-                                        <Paper
-                                            variant="outlined"
-                                            sx={{
-                                                backgroundColor: alpha(theme.palette.background.default, 0.38),
-                                                borderColor: alpha(theme.palette.divider, 0.28),
-                                                borderRadius: 2.5,
-                                                p: { md: 2, xs: 1.5 },
-                                            }}
-                                        >
-                                            <Stack
-                                                direction={{ md: "row", xs: "column" }}
-                                                spacing={1.5}
-                                                sx={{
-                                                    alignItems: { md: "center", xs: "stretch" },
-                                                    justifyContent: "space-between",
-                                                }}
-                                            >
-                                                <TextField
-                                                    fullWidth
-                                                    id="user-management-search"
-                                                    label={translate("Search Users")}
-                                                    size="small"
-                                                    sx={{
-                                                        flexBasis: { md: 420 },
-                                                        flexGrow: { md: 0 },
-                                                        maxWidth: { md: 520 },
-                                                    }}
-                                                    value={searchQuery}
-                                                    onChange={(event) => handleSearchChange(event.target.value)}
-                                                    slotProps={{
-                                                        input: {
-                                                            startAdornment: (
-                                                                <InputAdornment position="start">
-                                                                    <Search fontSize="small" />
-                                                                </InputAdornment>
-                                                            ),
-                                                        },
-                                                    }}
-                                                />
-                                                <Stack
-                                                    direction="row"
-                                                    spacing={1}
-                                                    sx={{
-                                                        flexShrink: 0,
-                                                        justifyContent: "flex-end",
-                                                        whiteSpace: "nowrap",
-                                                    }}
-                                                >
-                                                    <Button
-                                                        onClick={handleRefresh}
-                                                        startIcon={<Refresh />}
-                                                        sx={{ minWidth: 112 }}
-                                                        variant="outlined"
-                                                    >
+                                        <div className="rounded-lg border bg-muted/30 p-4">
+                                            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                                                <div className="w-full md:max-w-lg">
+                                                    <Label className="mb-2" htmlFor="user-management-search">
+                                                        {translate("Search Users")}
+                                                    </Label>
+                                                    <div className="relative">
+                                                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                                                        <Input
+                                                            className="h-10 pl-9"
+                                                            id="user-management-search"
+                                                            value={searchQuery}
+                                                            onChange={(event) => handleSearchChange(event.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex shrink-0 justify-end gap-2">
+                                                    <Button onClick={handleRefresh} variant="outline">
+                                                        <RefreshCw />
                                                         {translate("Refresh")}
                                                     </Button>
                                                     {canCreate ? (
-                                                        <Button
-                                                            onClick={handleOpenCreate}
-                                                            startIcon={<Add />}
-                                                            sx={{ minWidth: 144 }}
-                                                            variant="contained"
-                                                        >
+                                                        <Button onClick={handleOpenCreate}>
+                                                            <Plus />
                                                             {translate("Create User")}
                                                         </Button>
                                                     ) : null}
-                                                </Stack>
-                                            </Stack>
-                                        </Paper>
+                                                </div>
+                                            </div>
+                                        </div>
 
                                         {usersError ? (
                                             <CenteredState
                                                 action={
-                                                    <Button
-                                                        onClick={handleRefresh}
-                                                        startIcon={<Refresh />}
-                                                        variant="contained"
-                                                    >
+                                                    <Button onClick={handleRefresh}>
+                                                        <RefreshCw />
                                                         {translate("Retry")}
                                                     </Button>
                                                 }
@@ -1259,12 +1193,7 @@ const UserManagementView = () => {
 
                                         {!usersError && usersLoading ? (
                                             <CenteredState
-                                                action={
-                                                    <CircularProgress
-                                                        aria-label={translate("Loading users")}
-                                                        size={28}
-                                                    />
-                                                }
+                                                action={<Spinner aria-label={translate("Loading users")} size={28} />}
                                                 description={translate("Fetching users for the current search")}
                                                 title={translate("Loading Users")}
                                             />
@@ -1314,25 +1243,60 @@ const UserManagementView = () => {
                                                         users={pagedUsers}
                                                     />
                                                 )}
-                                                <TablePagination
-                                                    component="div"
-                                                    count={users.length}
-                                                    labelRowsPerPage={translate("Rows per page")}
-                                                    onPageChange={handleChangePage}
-                                                    onRowsPerPageChange={handleChangeRowsPerPage}
-                                                    page={page}
-                                                    rowsPerPage={rowsPerPage}
-                                                    rowsPerPageOptions={rowsPerPageOptions}
-                                                />
+                                                <div className="flex flex-col items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground sm:flex-row">
+                                                    <label
+                                                        className="flex items-center gap-2"
+                                                        htmlFor="user-management-rows"
+                                                    >
+                                                        {translate("Rows per page")}
+                                                        <select
+                                                            className="h-9 rounded-md border border-input bg-background px-2 text-foreground"
+                                                            id="user-management-rows"
+                                                            value={rowsPerPage}
+                                                            onChange={handleChangeRowsPerPage}
+                                                        >
+                                                            {rowsPerPageOptions.map((option) => (
+                                                                <option key={option} value={option}>
+                                                                    {option}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span>
+                                                            {page * rowsPerPage + 1}-
+                                                            {Math.min((page + 1) * rowsPerPage, users.length)} /{" "}
+                                                            {users.length}
+                                                        </span>
+                                                        <Button
+                                                            aria-label={translate("Go to previous page")}
+                                                            disabled={page === 0}
+                                                            onClick={() => handleChangePage(undefined, page - 1)}
+                                                            size="icon-sm"
+                                                            variant="ghost"
+                                                        >
+                                                            <ChevronLeft />
+                                                        </Button>
+                                                        <Button
+                                                            aria-label={translate("Go to next page")}
+                                                            disabled={(page + 1) * rowsPerPage >= users.length}
+                                                            onClick={() => handleChangePage(undefined, page + 1)}
+                                                            size="icon-sm"
+                                                            variant="ghost"
+                                                        >
+                                                            <ChevronRight />
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             </Fragment>
                                         ) : null}
                                     </Fragment>
                                 )}
                             </Fragment>
                         ) : null}
-                    </Stack>
-                </Paper>
-            </Container>
+                    </div>
+                </div>
+            </div>
         </Fragment>
     );
 
@@ -1395,102 +1359,119 @@ const UserDialog = ({
     values,
 }: UserDialogProps) => {
     const { t: translate } = useTranslation("settings");
-
     const groupValues = useMemo(() => toGroupsArray(values.groups), [values.groups]);
     const notificationEnabled = canNotify && values.email.trim() !== "";
     const generatingPassword = showPassword && values.generatePassword;
     const passwordPolicyEnabled = passwordPolicy.mode !== PasswordPolicyMode.Disabled;
+    const usernameError = errors.username || Boolean(helperText.username);
+    const emailError = errors.email || Boolean(helperText.email);
 
     return (
         <Dialog
-            fullWidth
-            maxWidth="sm"
-            onClose={onClose}
             open={open}
-            sx={{
-                "& .MuiDialog-paper": {
-                    borderRadius: 3,
-                },
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) onClose();
             }}
         >
-            <Box component="form" noValidate onSubmit={onSubmit}>
-                <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2.25} sx={{ pt: 0.5 }}>
-                        <DialogContentText sx={{ mb: 0.5 }}>{subtitle}</DialogContentText>
-                        <TextField
-                            disabled={loading || readOnlyUsername}
-                            error={errors.username || Boolean(helperText.username)}
-                            fullWidth
-                            helperText={helperText.username}
-                            label={translate("Username")}
-                            required
-                            value={values.username}
-                            onChange={(event) =>
-                                setValues((previous) => ({
-                                    ...previous,
-                                    username: event.target.value,
-                                }))
-                            }
-                        />
-                        <TextField
-                            disabled={loading}
-                            fullWidth
-                            label={translate("Display Name")}
-                            required
-                            value={values.displayName}
-                            onChange={(event) =>
-                                setValues((previous) => ({
-                                    ...previous,
-                                    displayName: event.target.value,
-                                }))
-                            }
-                        />
-                        <TextField
-                            disabled={loading}
-                            error={errors.email || Boolean(helperText.email)}
-                            fullWidth
-                            helperText={helperText.email}
-                            label={translate("Email")}
-                            required
-                            type="email"
-                            value={values.email}
-                            onChange={(event) =>
-                                setValues((previous) => ({
-                                    ...previous,
-                                    email: event.target.value,
-                                    generatePassword:
-                                        event.target.value.trim() === "" ? false : previous.generatePassword,
-                                    notify: previous.generatePassword || previous.notify,
-                                }))
-                            }
-                        />
-                        {showPassword && canNotify ? (
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={values.generatePassword}
-                                        disabled={loading || values.email.trim() === ""}
-                                        onChange={(event) =>
-                                            setValues((previous) => ({
-                                                ...previous,
-                                                generatePassword: event.target.checked,
-                                                notify: event.target.checked ? true : previous.notify,
-                                                password: event.target.checked ? "" : previous.password,
-                                            }))
-                                        }
-                                    />
+            <DialogContent className="max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+                <form noValidate onSubmit={onSubmit}>
+                    <DialogHeader>
+                        <DialogTitle>{title}</DialogTitle>
+                        <DialogDescription>{subtitle}</DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-6 space-y-4">
+                        <div>
+                            <Label className="mb-2" htmlFor="user-dialog-username">
+                                {translate("Username")} *
+                            </Label>
+                            <Input
+                                disabled={loading || readOnlyUsername}
+                                error={usernameError}
+                                id="user-dialog-username"
+                                required
+                                value={values.username}
+                                onChange={(event) =>
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        username: event.target.value,
+                                    }))
                                 }
-                                label={translate("Generate random password and email it to the user")}
                             />
+                            {helperText.username ? (
+                                <p className="mt-1 text-sm text-destructive">{helperText.username}</p>
+                            ) : null}
+                        </div>
+                        <div>
+                            <Label className="mb-2" htmlFor="user-dialog-display-name">
+                                {translate("Display Name")} *
+                            </Label>
+                            <Input
+                                disabled={loading}
+                                id="user-dialog-display-name"
+                                required
+                                value={values.displayName}
+                                onChange={(event) =>
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        displayName: event.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div>
+                            <Label className="mb-2" htmlFor="user-dialog-email">
+                                {translate("Email")} *
+                            </Label>
+                            <Input
+                                disabled={loading}
+                                error={emailError}
+                                id="user-dialog-email"
+                                required
+                                type="email"
+                                value={values.email}
+                                onChange={(event) =>
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        email: event.target.value,
+                                        generatePassword:
+                                            event.target.value.trim() === "" ? false : previous.generatePassword,
+                                        notify: previous.generatePassword || previous.notify,
+                                    }))
+                                }
+                            />
+                            {helperText.email ? (
+                                <p className="mt-1 text-sm text-destructive">{helperText.email}</p>
+                            ) : null}
+                        </div>
+                        {showPassword && canNotify ? (
+                            <div className="flex items-start gap-3 text-sm">
+                                <Checkbox
+                                    checked={values.generatePassword}
+                                    disabled={loading || values.email.trim() === ""}
+                                    id="user-dialog-generate-password"
+                                    onCheckedChange={(checked) =>
+                                        setValues((previous) => ({
+                                            ...previous,
+                                            generatePassword: checked === true,
+                                            notify: checked === true ? true : previous.notify,
+                                            password: checked === true ? "" : previous.password,
+                                        }))
+                                    }
+                                />
+                                <Label htmlFor="user-dialog-generate-password">
+                                    {translate("Generate random password and email it to the user")}
+                                </Label>
+                            </div>
                         ) : null}
                         {showPassword && !generatingPassword ? (
-                            <Box>
-                                <TextField
+                            <div>
+                                <Label className="mb-2" htmlFor="user-dialog-password">
+                                    {translate("Password")} *
+                                </Label>
+                                <Input
                                     disabled={loading}
                                     error={errors.password}
-                                    fullWidth
-                                    label={translate("Password")}
+                                    id="user-dialog-password"
                                     required
                                     type="password"
                                     value={values.password}
@@ -1504,84 +1485,86 @@ const UserDialog = ({
                                 {passwordPolicyEnabled ? (
                                     <PasswordMeter value={values.password} policy={passwordPolicy} />
                                 ) : null}
-                            </Box>
+                            </div>
                         ) : null}
-                        <TextField
-                            disabled={loading}
-                            fullWidth
-                            helperText={translate("Separate groups with commas")}
-                            label={translate("Groups")}
-                            value={values.groups}
-                            onChange={(event) =>
-                                setValues((previous) => ({
-                                    ...previous,
-                                    groups: event.target.value,
-                                }))
-                            }
-                        />
+                        <div>
+                            <Label className="mb-2" htmlFor="user-dialog-groups">
+                                {translate("Groups")}
+                            </Label>
+                            <Input
+                                disabled={loading}
+                                id="user-dialog-groups"
+                                value={values.groups}
+                                onChange={(event) =>
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        groups: event.target.value,
+                                    }))
+                                }
+                            />
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {translate("Separate groups with commas")}
+                            </p>
+                        </div>
                         {groupValues.length > 0 ? (
-                            <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                            <div className="flex flex-wrap gap-2">
                                 {groupValues.map((group) => (
-                                    <Chip
-                                        key={group}
-                                        label={group}
-                                        size="small"
-                                        sx={{ borderRadius: 1.5 }}
-                                        variant="outlined"
-                                    />
+                                    <span className="rounded-md border px-2 py-1 text-xs" key={group}>
+                                        {group}
+                                    </span>
                                 ))}
-                            </Stack>
+                            </div>
                         ) : null}
-                        <FormControlLabel
-                            control={
+                        <div className="flex items-center gap-3 text-sm">
+                            <Checkbox
+                                checked={values.disabled}
+                                disabled={loading}
+                                id="user-dialog-disabled"
+                                onCheckedChange={(checked) =>
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        disabled: checked === true,
+                                    }))
+                                }
+                            />
+                            <Label htmlFor="user-dialog-disabled">{translate("User disabled")}</Label>
+                        </div>
+                        {showPassword ? (
+                            <div className="flex items-start gap-3 text-sm">
                                 <Checkbox
-                                    checked={values.disabled}
-                                    disabled={loading}
-                                    onChange={(event) =>
+                                    checked={values.notify}
+                                    disabled={loading || !notificationEnabled || values.generatePassword}
+                                    id="user-dialog-notify"
+                                    onCheckedChange={(checked) =>
                                         setValues((previous) => ({
                                             ...previous,
-                                            disabled: event.target.checked,
+                                            notify: checked === true,
                                         }))
                                     }
                                 />
-                            }
-                            label={translate("User disabled")}
-                        />
-                        {showPassword ? (
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={values.notify}
-                                        disabled={loading || !notificationEnabled || values.generatePassword}
-                                        onChange={(event) =>
-                                            setValues((previous) => ({
-                                                ...previous,
-                                                notify: event.target.checked,
-                                            }))
-                                        }
-                                    />
-                                }
-                                label={translate("Notify user by email")}
-                            />
+                                <Label htmlFor="user-dialog-notify">{translate("Notify user by email")}</Label>
+                            </div>
                         ) : null}
                         {showPassword && !notificationEnabled ? (
-                            <Alert severity="info">
-                                {canNotify
-                                    ? translate("Add an email address to enable notification delivery")
-                                    : translate("Email notifications are unavailable for this backend")}
+                            <Alert>
+                                <AlertDescription>
+                                    {canNotify
+                                        ? translate("Add an email address to enable notification delivery")
+                                        : translate("Email notifications are unavailable for this backend")}
+                                </AlertDescription>
                             </Alert>
                         ) : null}
-                    </Stack>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, py: 2.25 }}>
-                    <Button disabled={loading} onClick={onClose}>
-                        {translate("Cancel")}
-                    </Button>
-                    <Button disabled={loading} type="submit" variant="contained">
-                        {loading ? translate("Saving") : submitLabel}
-                    </Button>
-                </DialogActions>
-            </Box>
+                    </div>
+                    <DialogFooter className="mt-6">
+                        <Button disabled={loading} onClick={onClose} variant="outline">
+                            {translate("Cancel")}
+                        </Button>
+                        <Button disabled={loading} type="submit">
+                            {loading ? translate("Saving") : submitLabel}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
         </Dialog>
     );
 };
@@ -1605,53 +1588,53 @@ const PasswordResetDialog = ({
 
     return (
         <Dialog
-            fullWidth
-            maxWidth="sm"
-            onClose={onClose}
             open={open}
-            sx={{
-                "& .MuiDialog-paper": {
-                    borderRadius: 3,
-                },
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) onClose();
             }}
         >
-            <Box component="form" noValidate onSubmit={onSubmit}>
-                <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2.25} sx={{ pt: 0.5 }}>
-                        <DialogContentText sx={{ mb: 0.5 }}>
-                            {translate("Set a new password for this user")}
-                        </DialogContentText>
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    checked={values.generatePassword}
-                                    disabled={loading || !canGeneratePassword}
-                                    onChange={(event) =>
-                                        setValues((previous) => ({
-                                            ...previous,
-                                            generatePassword: event.target.checked,
-                                            password: event.target.checked ? "" : previous.password,
-                                        }))
-                                    }
-                                />
-                            }
-                            label={translate("Generate random password and email it to the user")}
-                        />
+            <DialogContent className="max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+                <form noValidate onSubmit={onSubmit}>
+                    <DialogHeader>
+                        <DialogTitle>{title}</DialogTitle>
+                        <DialogDescription>{translate("Set a new password for this user")}</DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-6 space-y-4">
+                        <div className="flex items-start gap-3 text-sm">
+                            <Checkbox
+                                checked={values.generatePassword}
+                                disabled={loading || !canGeneratePassword}
+                                id="password-reset-generate"
+                                onCheckedChange={(checked) =>
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        generatePassword: checked === true,
+                                        password: checked === true ? "" : previous.password,
+                                    }))
+                                }
+                            />
+                            <Label htmlFor="password-reset-generate">
+                                {translate("Generate random password and email it to the user")}
+                            </Label>
+                        </div>
                         {!canGeneratePassword ? (
-                            <Alert severity="info">
-                                {canNotify
-                                    ? translate("Email notification is unavailable for this user")
-                                    : translate("Email notifications are unavailable for this backend")}
+                            <Alert>
+                                <AlertDescription>
+                                    {canNotify
+                                        ? translate("Email notification is unavailable for this user")
+                                        : translate("Email notifications are unavailable for this backend")}
+                                </AlertDescription>
                             </Alert>
                         ) : null}
                         {!values.generatePassword ? (
-                            <Box>
-                                <TextField
+                            <div>
+                                <Label className="mb-2" htmlFor="password-reset-password">
+                                    {translate("New Password")} *
+                                </Label>
+                                <Input
                                     disabled={loading}
                                     error={errors.password}
-                                    fullWidth
-                                    label={translate("New Password")}
+                                    id="password-reset-password"
                                     required
                                     type="password"
                                     value={values.password}
@@ -1665,19 +1648,19 @@ const PasswordResetDialog = ({
                                 {passwordPolicyEnabled ? (
                                     <PasswordMeter value={values.password} policy={passwordPolicy} />
                                 ) : null}
-                            </Box>
+                            </div>
                         ) : null}
-                    </Stack>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, py: 2.25 }}>
-                    <Button disabled={loading} onClick={onClose}>
-                        {translate("Cancel")}
-                    </Button>
-                    <Button disabled={loading} type="submit" variant="contained">
-                        {loading ? translate("Saving") : translate("Reset Password")}
-                    </Button>
-                </DialogActions>
-            </Box>
+                    </div>
+                    <DialogFooter className="mt-6">
+                        <Button disabled={loading} onClick={onClose} variant="outline">
+                            {translate("Cancel")}
+                        </Button>
+                        <Button disabled={loading} type="submit">
+                            {loading ? translate("Saving") : translate("Reset Password")}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
         </Dialog>
     );
 };
@@ -1687,28 +1670,25 @@ const ConfirmDialog = ({ actionLabel, description, loading, onClose, onConfirm, 
 
     return (
         <Dialog
-            fullWidth
-            maxWidth="xs"
-            onClose={onClose}
             open={open}
-            sx={{
-                "& .MuiDialog-paper": {
-                    borderRadius: 3,
-                },
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) onClose();
             }}
         >
-            <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
-            <DialogContent>
-                <DialogContentText>{description}</DialogContentText>
+            <DialogContent showCloseButton={false}>
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="mt-4">
+                    <Button disabled={loading} onClick={onClose} variant="outline">
+                        {translate("Cancel")}
+                    </Button>
+                    <Button disabled={loading} onClick={onConfirm}>
+                        {loading ? translate("Saving") : actionLabel}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
-            <DialogActions sx={{ px: 3, py: 2.25 }}>
-                <Button disabled={loading} onClick={onClose}>
-                    {translate("Cancel")}
-                </Button>
-                <Button disabled={loading} onClick={onConfirm} variant="contained">
-                    {loading ? translate("Saving") : actionLabel}
-                </Button>
-            </DialogActions>
         </Dialog>
     );
 };
@@ -1742,86 +1722,57 @@ const UserTable = ({
     statusSortDirection,
     translate,
     users,
-}: UserTableProps) => {
-    const theme = useTheme();
-
-    return (
-        <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{
-                borderColor: alpha(theme.palette.divider, 0.32),
-                borderRadius: 2.5,
-                overflow: "hidden",
-            }}
-        >
-            <Table
-                sx={{
-                    "& .MuiTableCell-body": {
-                        borderBottomColor: alpha(theme.palette.divider, 0.28),
-                        py: 1.5,
-                    },
-                    "& .MuiTableCell-head": {
-                        backgroundColor: alpha(theme.palette.background.default, 0.44),
-                        borderBottomColor: alpha(theme.palette.divider, 0.32),
-                        color: "text.secondary",
-                        fontSize: theme.typography.caption.fontSize,
-                        fontWeight: 700,
-                        letterSpacing: 0.4,
-                        py: 1.25,
-                        textTransform: "uppercase",
-                    },
-                    "& .MuiTableRow-root:last-of-type .MuiTableCell-body": {
-                        borderBottom: 0,
-                    },
-                }}
-            >
-                <TableHead>
-                    <TableRow>
-                        <TableCell>{translate("Username")}</TableCell>
-                        <TableCell>{translate("Display Name")}</TableCell>
-                        <TableCell>{translate("Email")}</TableCell>
-                        <TableCell>{translate("Groups")}</TableCell>
-                        <TableCell>
-                            <TableSortLabel active direction={statusSortDirection} onClick={onStatusSort}>
-                                {translate("Status")}
-                            </TableSortLabel>
-                        </TableCell>
-                        <TableCell align="right">{translate("Actions")}</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {users.map((user) => (
-                        <TableRow key={user.username} hover>
-                            <TableCell>{user.username}</TableCell>
-                            <TableCell>{user.display_name}</TableCell>
-                            <TableCell>{user.email || translate("Not Set")}</TableCell>
-                            <TableCell>
-                                <GroupsList groups={user.groups} translate={translate} />
-                            </TableCell>
-                            <TableCell>
-                                <StatusChip disabled={user.disabled} translate={translate} />
-                            </TableCell>
-                            <TableCell align="right">
-                                <RowActions
-                                    canDelete={canDelete}
-                                    canResetPassword={canResetPassword}
-                                    canUpdate={canUpdate}
-                                    onDelete={() => onDelete(user)}
-                                    onEdit={() => onEdit(user.username)}
-                                    onResetPassword={() => onResetPassword(user.username)}
-                                    onToggle={() => onToggle(user)}
-                                    translate={translate}
-                                    user={user}
-                                />
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </TableContainer>
-    );
-};
+}: UserTableProps) => (
+    <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-left text-sm">
+            <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b">
+                    <th className="px-4 py-3 font-semibold">{translate("Username")}</th>
+                    <th className="px-4 py-3 font-semibold">{translate("Display Name")}</th>
+                    <th className="px-4 py-3 font-semibold">{translate("Email")}</th>
+                    <th className="px-4 py-3 font-semibold">{translate("Groups")}</th>
+                    <th
+                        aria-sort={statusSortDirection === "asc" ? "ascending" : "descending"}
+                        className="px-4 py-3 font-semibold"
+                    >
+                        <Button className="-ml-3 h-7 px-3 text-xs" onClick={onStatusSort} size="sm" variant="ghost">
+                            {translate("Status")}
+                        </Button>
+                    </th>
+                    <th className="px-4 py-3 text-right font-semibold">{translate("Actions")}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {users.map((user) => (
+                    <tr className="border-b last:border-0 hover:bg-muted/20" key={user.username}>
+                        <td className="px-4 py-3 font-medium">{user.username}</td>
+                        <td className="px-4 py-3">{user.display_name}</td>
+                        <td className="px-4 py-3">{user.email || translate("Not Set")}</td>
+                        <td className="px-4 py-3">
+                            <GroupsList groups={user.groups} translate={translate} />
+                        </td>
+                        <td className="px-4 py-3">
+                            <StatusChip disabled={user.disabled} translate={translate} />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                            <RowActions
+                                canDelete={canDelete}
+                                canResetPassword={canResetPassword}
+                                canUpdate={canUpdate}
+                                onDelete={() => onDelete(user)}
+                                onEdit={() => onEdit(user.username)}
+                                onResetPassword={() => onResetPassword(user.username)}
+                                onToggle={() => onToggle(user)}
+                                translate={translate}
+                                user={user}
+                            />
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
 
 const UserCards = ({
     canDelete,
@@ -1834,35 +1785,25 @@ const UserCards = ({
     translate,
     users,
 }: UserCollectionProps) => (
-    <Stack spacing={1.25}>
+    <div className="space-y-3">
         {users.map((user) => (
-            <Card
-                key={user.username}
-                variant="outlined"
-                sx={(theme) => ({
-                    borderColor: alpha(theme.palette.divider, 0.32),
-                    borderRadius: 2.5,
-                    boxShadow: `0 10px 28px ${alpha(theme.palette.common.black, 0.025)}`,
-                })}
-            >
-                <CardContent sx={{ pb: 1.25 }}>
-                    <Stack spacing={1.5}>
-                        <Stack direction="row" justifyContent="space-between" spacing={1}>
-                            <Box>
-                                <Typography fontWeight={600}>{user.display_name}</Typography>
-                                <Typography color="text.secondary" variant="body2">
-                                    {user.username}
-                                </Typography>
-                            </Box>
-                            <StatusChip disabled={user.disabled} translate={translate} />
-                        </Stack>
-                        <Typography color={user.email ? "text.primary" : "text.secondary"} variant="body2">
-                            {user.email || translate("Not Set")}
-                        </Typography>
+            <Card className="gap-0 py-0" key={user.username}>
+                <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="font-semibold">{user.display_name}</p>
+                            <p className="text-sm text-muted-foreground">{user.username}</p>
+                        </div>
+                        <StatusChip disabled={user.disabled} translate={translate} />
+                    </div>
+                    <p className={`mt-3 text-sm ${user.email ? "" : "text-muted-foreground"}`}>
+                        {user.email || translate("Not Set")}
+                    </p>
+                    <div className="mt-3">
                         <GroupsList groups={user.groups} translate={translate} />
-                    </Stack>
+                    </div>
                 </CardContent>
-                <CardActions sx={{ justifyContent: "flex-end", pb: 2, pt: 0, px: 2 }}>
+                <CardFooter className="justify-end border-t px-5 py-3">
                     <RowActions
                         canDelete={canDelete}
                         canResetPassword={canResetPassword}
@@ -1874,40 +1815,60 @@ const UserCards = ({
                         translate={translate}
                         user={user}
                     />
-                </CardActions>
+                </CardFooter>
             </Card>
         ))}
-    </Stack>
+    </div>
 );
 
 const GroupsList = ({ groups, translate }: { groups: string[]; translate: (key: string) => string }) =>
     groups.length > 0 ? (
-        <Stack direction="row" flexWrap="wrap" gap={0.75}>
+        <div className="flex flex-wrap gap-2">
             {groups.map((group) => (
-                <Chip key={group} label={group} size="small" sx={{ borderRadius: 1.5 }} variant="outlined" />
+                <span className="rounded-md border px-2 py-1 text-xs" key={group}>
+                    {group}
+                </span>
             ))}
-        </Stack>
+        </div>
     ) : (
-        <Typography color="text.secondary" variant="body2">
-            {translate("No Groups")}
-        </Typography>
+        <span className="text-sm text-muted-foreground">{translate("No Groups")}</span>
     );
 
 const StatusChip = ({ disabled, translate }: { disabled: boolean; translate: (key: string) => string }) => (
-    <Chip
-        label={disabled ? translate("Disabled") : translate("Enabled")}
-        size="small"
-        sx={(theme) => ({
-            backgroundColor: disabled
-                ? alpha(theme.palette.text.secondary, 0.06)
-                : alpha(theme.palette.success.main, 0.1),
-            borderColor: disabled ? alpha(theme.palette.text.secondary, 0.22) : alpha(theme.palette.success.main, 0.28),
-            borderRadius: 1.5,
-            color: disabled ? "text.secondary" : "success.dark",
-            fontWeight: 600,
-        })}
-        variant="outlined"
-    />
+    <span
+        className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${
+            disabled
+                ? "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+                : "border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400"
+        }`}
+    >
+        {disabled ? translate("Disabled") : translate("Enabled")}
+    </span>
+);
+
+const ActionButton = ({
+    ariaLabel,
+    children,
+    label,
+    onClick,
+}: {
+    ariaLabel: string;
+    children: ReactNode;
+    label: string;
+    onClick: () => void;
+}) => (
+    <TooltipProvider>
+        <Tooltip>
+            <TooltipTrigger
+                render={
+                    <Button aria-label={ariaLabel} onClick={onClick} size="icon-sm" variant="ghost">
+                        {children}
+                    </Button>
+                }
+            />
+            <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+    </TooltipProvider>
 );
 
 const RowActions = ({
@@ -1931,82 +1892,54 @@ const RowActions = ({
     translate: (key: string) => string;
     user: AdminUser;
 }) => (
-    <Stack direction="row" justifyContent="flex-end" spacing={0.25}>
+    <div className="flex justify-end gap-1">
         {canUpdate ? (
-            <Tooltip title={translate("Edit User")}>
-                <IconButton
-                    aria-label={`${translate("Edit User")} ${user.username}`}
-                    onClick={onEdit}
-                    size="small"
-                    sx={{ color: "text.secondary" }}
-                >
-                    <Edit fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            <ActionButton
+                ariaLabel={`${translate("Edit User")} ${user.username}`}
+                label={translate("Edit User")}
+                onClick={onEdit}
+            >
+                <Pencil />
+            </ActionButton>
         ) : null}
         {canResetPassword ? (
-            <Tooltip title={translate("Reset Password")}>
-                <IconButton
-                    aria-label={`${translate("Reset Password")} ${user.username}`}
-                    onClick={onResetPassword}
-                    size="small"
-                    sx={{ color: "text.secondary" }}
-                >
-                    <LockReset fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            <ActionButton
+                ariaLabel={`${translate("Reset Password")} ${user.username}`}
+                label={translate("Reset Password")}
+                onClick={onResetPassword}
+            >
+                <KeyRound />
+            </ActionButton>
         ) : null}
         {canUpdate ? (
-            <Tooltip title={user.disabled ? translate("Enable User") : translate("Disable User")}>
-                <IconButton
-                    aria-label={`${user.disabled ? translate("Enable User") : translate("Disable User")} ${user.username}`}
-                    onClick={onToggle}
-                    size="small"
-                    sx={{ color: "text.secondary" }}
-                >
-                    {user.disabled ? <Person fontSize="small" /> : <PersonOff fontSize="small" />}
-                </IconButton>
-            </Tooltip>
+            <ActionButton
+                ariaLabel={`${user.disabled ? translate("Enable User") : translate("Disable User")} ${user.username}`}
+                label={user.disabled ? translate("Enable User") : translate("Disable User")}
+                onClick={onToggle}
+            >
+                {user.disabled ? <UserRound /> : <UserRoundX />}
+            </ActionButton>
         ) : null}
         {canDelete ? (
-            <Tooltip title={translate("Delete User")}>
-                <IconButton
-                    aria-label={`${translate("Delete User")} ${user.username}`}
-                    onClick={onDelete}
-                    size="small"
-                    sx={{ color: "text.secondary" }}
-                >
-                    <Delete fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            <ActionButton
+                ariaLabel={`${translate("Delete User")} ${user.username}`}
+                label={translate("Delete User")}
+                onClick={onDelete}
+            >
+                <Trash2 />
+            </ActionButton>
         ) : null}
-    </Stack>
+    </div>
 );
 
 const CenteredState = ({ action, description, title }: { action?: ReactNode; description: string; title: string }) => (
-    <Paper
-        variant="outlined"
-        sx={(theme) => ({
-            alignItems: "center",
-            backgroundColor: alpha(theme.palette.background.default, 0.28),
-            borderColor: alpha(theme.palette.divider, 0.28),
-            borderRadius: 2.5,
-            display: "flex",
-            justifyContent: "center",
-            minHeight: 220,
-            px: 3,
-            py: 4,
-            textAlign: "center",
-        })}
-    >
-        <Stack spacing={1.5} sx={{ alignItems: "center", maxWidth: 420 }}>
-            <Typography fontWeight={600} variant="h6">
-                {title}
-            </Typography>
-            <Typography color="text.secondary">{description}</Typography>
+    <Card className="min-h-52 items-center justify-center bg-muted/20 px-6 py-10 text-center">
+        <CardContent className="flex max-w-md flex-col items-center gap-3 p-0">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <p className="text-muted-foreground">{description}</p>
             {action}
-        </Stack>
-    </Paper>
+        </CardContent>
+    </Card>
 );
 
 export default UserManagementView;

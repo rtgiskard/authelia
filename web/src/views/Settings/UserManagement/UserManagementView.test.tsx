@@ -372,7 +372,9 @@ it("creates a user with a generated password notification payload", async () => 
     fireEvent.change(within(dialog).getByLabelText("Email *"), {
         target: { value: "generated@example.com" },
     });
-    fireEvent.click(within(dialog).getByLabelText("Generate random password and email it to the user"));
+    fireEvent.click(
+        within(dialog).getByRole("checkbox", { name: "Generate random password and email it to the user" }),
+    );
 
     expect(within(dialog).queryByLabelText("Password *")).not.toBeInTheDocument();
 
@@ -783,7 +785,9 @@ it("resets a user password with a generated password notification payload", asyn
 
     const dialog = await screen.findByRole("dialog", { name: "Reset Password" }, { timeout: 3000 });
 
-    fireEvent.click(within(dialog).getByLabelText("Generate random password and email it to the user"));
+    fireEvent.click(
+        within(dialog).getByRole("checkbox", { name: "Generate random password and email it to the user" }),
+    );
     expect(within(dialog).queryByLabelText("New Password *")).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Reset Password" }));

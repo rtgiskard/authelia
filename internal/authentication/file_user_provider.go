@@ -1,10 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package authentication
 
 import (
-	_ "embed" // Embed users_database.template.yml.
+	_ "embed" // Embed the users_database.template files.
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -20,6 +25,7 @@ import (
 	"github.com/authelia/authelia/v4/internal/configuration/schema"
 	"github.com/authelia/authelia/v4/internal/expression"
 	"github.com/authelia/authelia/v4/internal/logging"
+	"github.com/authelia/authelia/v4/internal/utils"
 )
 
 // FileUserProvider is a provider reading details from a file.
@@ -78,6 +84,7 @@ func (p *FileUserProvider) Reload() (reloaded bool, err error) {
 	return true, nil
 }
 
+// Close implements the UserProvider interface.
 func (p *FileUserProvider) Close() (err error) {
 	return nil
 }
@@ -261,6 +268,7 @@ func (p *FileUserProvider) GetDetails(username string) (details *UserDetails, er
 	return d.ToUserDetails(), nil
 }
 
+// GetDetailsExtended implements the UserProvider interface.
 func (p *FileUserProvider) GetDetailsExtended(username string) (details *UserDetailsExtended, err error) {
 	var d FileUserDatabaseUserDetails
 
@@ -304,6 +312,7 @@ func (p *FileUserProvider) UpdatePassword(username string, newPassword string) (
 	return nil
 }
 
+// ChangePassword implements the UserProvider interface.
 func (p *FileUserProvider) ChangePassword(username string, oldPassword string, newPassword string) (err error) {
 	var details FileUserDatabaseUserDetails
 
@@ -358,7 +367,7 @@ func (p *FileUserProvider) ChangePassword(username string, oldPassword string, n
 // StartupCheck implements the startup check provider interface.
 func (p *FileUserProvider) StartupCheck() (err error) {
 	if err = checkDatabase(p.config.Path); err != nil {
-		logging.Logger().WithError(err).Errorf("Error checking user authentication YAML database")
+		logging.Logger().WithError(err).Errorf("Error checking user authentication database")
 
 		return fmt.Errorf("one or more errors occurred checking the authentication database")
 	}
@@ -449,7 +458,16 @@ func NewFileCryptoHashFromConfig(config schema.AuthenticationBackendFilePassword
 
 func checkDatabase(path string) (err error) {
 	if _, err = os.Stat(path); os.IsNotExist(err) {
-		if err = os.WriteFile(path, userYAMLTemplate, 0600); err != nil {
+		template := userYAMLTemplate
+
+		switch filepath.Ext(path) {
+		case utils.ExtTOML:
+			template = userTOMLTemplate
+		case utils.ExtJSON:
+			template = userJSONTemplate
+		}
+
+		if err = os.WriteFile(path, template, 0600); err != nil {
 			return fmt.Errorf("user authentication database file doesn't exist at path '%s' and could not be generated: %w", path, err)
 		}
 
@@ -461,5 +479,13 @@ func checkDatabase(path string) (err error) {
 	return nil
 }
 
-//go:embed users_database.template.yml
-var userYAMLTemplate []byte
+var (
+	//go:embed users_database.template.yml
+	userYAMLTemplate []byte
+
+	//go:embed users_database.template.toml
+	userTOMLTemplate []byte
+
+	//go:embed users_database.template.json
+	userJSONTemplate []byte
+)

@@ -1,6 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { useEffect } from "react";
 
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router";
 
 import {
     IndexRoute,

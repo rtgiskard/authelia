@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package schema
 
 import (
@@ -6,11 +10,29 @@ import (
 	"time"
 )
 
+// Provider names, used by the startup checks and the verbose health check endpoint.
+const (
+	ProviderNameNTP              = "ntp"
+	ProviderNameStorage          = "storage"
+	ProviderNameUser             = "user"
+	ProviderNameSession          = "session"
+	ProviderNameNotification     = "notification"
+	ProviderNameExpressions      = "expressions"
+	ProviderNameWebAuthnMetaData = "webauthn-metadata"
+)
+
+// ProviderNames are every provider which can be probed by name.
+var ProviderNames = []string{
+	ProviderNameStorage, ProviderNameSession, ProviderNameUser, ProviderNameNotification,
+	ProviderNameNTP, ProviderNameExpressions, ProviderNameWebAuthnMetaData,
+}
+
 const (
 	argon2   = "argon2"
 	argon2id = "argon2id"
 )
 
+// Lower case hash algorithm name strings.
 const (
 	SHA1Lower   = "sha1"
 	SHA224Lower = "sha224"
@@ -60,6 +82,20 @@ const (
 
 	// RefreshIntervalDefault represents the default value of refresh_interval.
 	RefreshIntervalDefault = time.Minute * 5
+)
+
+const (
+	// HeaderRemoteUser is the header which by default communicates the username of the authenticated user.
+	HeaderRemoteUser = "Remote-User"
+
+	// HeaderRemoteGroups is the header which by default communicates the groups of the authenticated user.
+	HeaderRemoteGroups = "Remote-Groups"
+
+	// HeaderRemoteName is the header which by default communicates the display name of the authenticated user.
+	HeaderRemoteName = "Remote-Name"
+
+	// HeaderRemoteEmail is the header which by default communicates the email of the authenticated user.
+	HeaderRemoteEmail = "Remote-Email"
 )
 
 const (

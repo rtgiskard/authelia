@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package authentication
 
 import (
@@ -13,6 +17,7 @@ import (
 
 	"github.com/go-crypt/crypt/algorithm/bcrypt"
 	"github.com/go-crypt/crypt/algorithm/pbkdf2"
+	"github.com/go-crypt/crypt/algorithm/plaintext"
 	"github.com/go-crypt/crypt/algorithm/scrypt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,11 +40,36 @@ func TestShouldErrorPermissionsOnLocalFS(t *testing.T) {
 }
 
 func TestShouldErrorAndGenerateUserDB(t *testing.T) {
-	dir := t.TempDir()
+	testCases := []struct {
+		name string
+		file string
+	}{
+		{"ShouldGenerateYAML", "users_database.yml"},
+		{"ShouldGenerateYAMLLong", "users_database.yaml"},
+		{"ShouldGenerateTOML", "users_database.toml"},
+		{"ShouldGenerateJSON", "users_database.json"},
+	}
 
-	f := filepath.Join(dir, "users_database.yml")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := filepath.Join(t.TempDir(), tc.file)
 
-	require.EqualError(t, checkDatabase(f), fmt.Sprintf("user authentication database file doesn't exist at path '%s' and has been generated", f))
+			require.EqualError(t, checkDatabase(f), fmt.Sprintf("user authentication database file doesn't exist at path '%s' and has been generated", f))
+
+			model := &FileDatabaseModel{}
+
+			require.NoError(t, model.Read(f))
+			require.Contains(t, model.Users, "authelia")
+
+			user := model.Users["authelia"]
+
+			assert.True(t, user.Disabled)
+			assert.Equal(t, "Test User", user.DisplayName)
+			assert.Equal(t, "authelia@authelia.com", user.Email)
+			assert.Equal(t, []string{"admins", "dev"}, user.Groups)
+			assert.Equal(t, "$argon2id$v=19$m=32768,t=1,p=8$eUhVT1dQa082YVk2VUhDMQ$E8QI4jHbUBt3EdsU1NFDu4Bq5jObKNx7nBKSn1EYQxk", user.Password)
+		})
+	}
 }
 
 func TestShouldErrorFailCreateDB(t *testing.T) {
@@ -406,6 +436,97 @@ func TestShouldErrOnUpdatePasswordNoUser(t *testing.T) {
 		assert.Equal(t, provider.UpdatePassword("nousers", "newpassword"), ErrUserNotFound)
 		assert.Equal(t, provider.UpdatePassword("dis", "example"), ErrUserNotFound)
 	})
+}
+
+func TestFileUserProviderShouldNotDeadlockOnUpdatePassword(t *testing.T) {
+	const (
+		concurrency = 8
+		iterations  = 50
+		timeout     = 30 * time.Second
+	)
+
+	hash, err := plaintext.New()
+	require.NoError(t, err)
+
+	update := func(provider *FileUserProvider) {
+		for i := 0; i < iterations; i++ {
+			_ = provider.UpdatePassword("john", "apple123")
+		}
+	}
+
+	reload := func(provider *FileUserProvider) {
+		for i := 0; i < iterations; i++ {
+			_, _ = provider.Reload()
+		}
+	}
+
+	details := func(provider *FileUserProvider) {
+		for i := 0; i < iterations; i++ {
+			_, _ = provider.GetDetails("john")
+		}
+	}
+
+	testCases := []struct {
+		name    string
+		workers []func(provider *FileUserProvider)
+	}{
+		{
+			"ShouldNotDeadlockWithConcurrentUpdates",
+			[]func(provider *FileUserProvider){update},
+		},
+		{
+			"ShouldNotDeadlockWithConcurrentUpdatesAndReloads",
+			[]func(provider *FileUserProvider){update, reload},
+		},
+		{
+			"ShouldNotDeadlockWithConcurrentUpdatesReloadsAndReads",
+			[]func(provider *FileUserProvider){update, reload, details},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			WithDatabase(t, UserDatabaseContent, func(path string) {
+				config := DefaultFileAuthenticationBackendConfiguration
+				config.Path = path
+
+				provider := NewFileUserProvider(&config)
+
+				require.NoError(t, provider.StartupCheck())
+
+				provider.hash = hash
+
+				done := make(chan struct{})
+
+				go func() {
+					defer close(done)
+
+					wg := &sync.WaitGroup{}
+
+					for _, worker := range tc.workers {
+						for i := 0; i < concurrency; i++ {
+							wg.Add(1)
+
+							go func() {
+								defer wg.Done()
+
+								worker(provider)
+							}()
+						}
+					}
+
+					wg.Wait()
+				}()
+
+				select {
+				case <-done:
+					require.NoError(t, provider.UpdatePassword("john", "apple123"))
+				case <-time.After(timeout):
+					t.Fatalf("deadlock detected: the concurrent workload did not complete within %s", timeout)
+				}
+			})
+		})
+	}
 }
 
 func TestShouldChangePassword(t *testing.T) {
@@ -1076,6 +1197,66 @@ func TestFileUserProviderAdminUpdateShouldUseMatchedUsernameKey(t *testing.T) {
 		assert.NotContains(t, string(content), "  \"\":\n")
 	})
 }
+func TestShouldRegenerateAliasesOnReload(t *testing.T) {
+	testCases := []struct {
+		name            string
+		searchEmail     bool
+		searchCI        bool
+		expectedEmails  map[string]string
+		expectedAliases map[string]string
+	}{
+		{
+			"ShouldRegenerateNothing",
+			false,
+			false,
+			map[string]string{},
+			map[string]string{},
+		},
+		{
+			"ShouldRegenerateEmails",
+			true,
+			false,
+			map[string]string{"john.doe@authelia.com": "john"},
+			map[string]string{},
+		},
+		{
+			"ShouldRegenerateAliases",
+			false,
+			true,
+			map[string]string{},
+			map[string]string{"john": "john"},
+		},
+		{
+			"ShouldRegenerateEmailsAndAliases",
+			true,
+			true,
+			map[string]string{"john.doe@authelia.com": "john"},
+			map[string]string{"john": "john"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			WithDatabase(t, UserDatabaseContent, func(path string) {
+				database := NewFileUserDatabase(path, tc.searchEmail, tc.searchCI, nil)
+
+				require.NoError(t, database.Load())
+
+				require.NoError(t, os.WriteFile(path, UserDatabaseContentSingleUser, fileAuthenticationMode))
+				require.NoError(t, database.Load())
+
+				assert.Equal(t, tc.expectedEmails, database.Emails)
+				assert.Equal(t, tc.expectedAliases, database.Aliases)
+
+				_, err := database.GetUserDetails("harry")
+				assert.EqualError(t, err, "user not found")
+
+				_, err = database.GetUserDetails("harry.potter@authelia.com")
+				assert.EqualError(t, err, "user not found")
+			})
+		})
+	}
+}
 
 func TestNewFileCryptoHashFromConfig(t *testing.T) {
 	testCases := []struct {
@@ -1285,6 +1466,17 @@ users:
     password: "$argon2id$v=19$m=65536,t=3,p=2$BpLnfgDsc2WD8F2q$o/vzA4myCqZZ36bUGsDY//8mKUYNZZaR0t4MFFSs+iM"
     disabled: true
     email: disabled@authelia.com
+`)
+
+var UserDatabaseContentSingleUser = []byte(`
+users:
+  john:
+    displayname: "John Doe"
+    password: "{CRYPT}$argon2id$v=19$m=65536,t=3,p=2$BpLnfgDsc2WD8F2q$o/vzA4myCqZZ36bUGsDY//8mKUYNZZaR0t4MFFSs+iM"
+    email: john.doe@authelia.com
+    groups:
+      - admins
+      - dev
 `)
 
 var UserDatabaseContentExtra = []byte(`

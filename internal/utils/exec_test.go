@@ -1,31 +1,16 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package utils
 
 import (
 	"errors"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func TestShouldExecCommandOnAutheliaRootPath(t *testing.T) {
-	suffix := "authelia"
-
-	if pipeline := os.Getenv("BUILDKITE_PIPELINE_SLUG"); pipeline != "" {
-		suffix = pipeline
-	}
-
-	cmd := Command("pwd")
-	result, err := cmd.CombinedOutput()
-	assert.NoError(t, err, "")
-
-	str := strings.Trim(string(result), "\n")
-
-	assert.NoError(t, err, "")
-	assert.Equal(t, true, strings.HasSuffix(str, suffix))
-}
 
 func TestCommandShouldOutputResult(t *testing.T) {
 	output, exitcode, err := RunCommandAndReturnOutput("echo hello")

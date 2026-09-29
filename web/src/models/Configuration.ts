@@ -1,4 +1,8 @@
-import type { SecondFactorMethod } from "@models/Methods";
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import { SecondFactorMethod } from "@models/Methods";
 
 export interface Configuration {
     administration_enabled?: boolean;

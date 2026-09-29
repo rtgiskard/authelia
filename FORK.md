@@ -41,3 +41,17 @@ Default sync policy:
 3. Import upstream changes into fork branches deliberately, preferably as small cherry-picks or reviewed merges.
 4. Do not rewrite published fork history by default.
 5. Do not push to upstream remotes.
+6. Resolve conflicts using upstream implementations and dependencies as the baseline, migrating fork features rather
+   than dropping them or retaining obsolete upstream code.
+
+The portal follows upstream's Tailwind CSS / Base UI components and `react-router` package. Fork user management keeps
+its administrator authorization and elevated-session requirements, user creation, editing, deletion, enablement,
+disablement, password reset, password-policy validation, and notification feedback. The File backend keeps atomic
+persistence, unique identities, and upstream user-database format and schema metadata support.
+
+Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
+normalization, and elevation rate-limit feedback remain supported.
+
+Sync verification must package upstream API documentation assets as well as portal output before starting the server.
+Compare failing tests with an untouched upstream checkout before attributing them to fork changes, and report upstream
+failures explicitly rather than treating the complete suite as passing.

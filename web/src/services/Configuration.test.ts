@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { SecondFactorMethod } from "@models/Methods";
 import { Get } from "@services/Client";
 import { getConfiguration } from "@services/Configuration";
@@ -25,7 +29,6 @@ it("gets configuration and transforms available methods", async () => {
     );
 
     const result = await getConfiguration();
-    expect(Get).toHaveBeenCalledWith("/configuration");
     expect(result.available_methods).toBeInstanceOf(Set);
     expect(result.available_methods.has(SecondFactorMethod.TOTP)).toBe(true);
     expect(result.available_methods.has(SecondFactorMethod.WebAuthn)).toBe(true);

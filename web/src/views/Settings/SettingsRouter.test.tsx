@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import type { ReactNode } from "react";
 
 import { act, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 
 import { useConfiguration } from "@hooks/Configuration";
 import { useAutheliaState } from "@hooks/State";

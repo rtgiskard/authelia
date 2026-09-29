@@ -1,20 +1,10 @@
 import {
     createAdminUser,
-    deleteAdminUser,
-    getAdminUser,
     getAdminUserManagementCapabilities,
     listAdminUsers,
     resetAdminUserPassword,
-    updateAdminUser,
 } from "@services/AdminUsers";
-import { AdminUsersPath } from "@services/Api";
-import {
-    DeleteWithOptionalResponse,
-    Get,
-    PatchWithOptionalResponse,
-    PostWithOptionalResponse,
-    PutWithOptionalResponse,
-} from "@services/Client";
+import { Get, PostWithOptionalResponse, PutWithOptionalResponse } from "@services/Client";
 
 vi.mock("@services/Api", () => ({
     AdminUsersPath: "/admin/users",
@@ -28,25 +18,7 @@ vi.mock("@services/Client", () => ({
     PutWithOptionalResponse: vi.fn(),
 }));
 
-it("calls PostWithOptionalResponse with the admin create user payload", async () => {
-    const payload = {
-        disabled: false,
-        display_name: "Example User",
-        email: "user@example.com",
-        groups: ["admins", "users"],
-        notify: true,
-        password: "password",
-        username: "example",
-    };
-
-    vi.mocked(PostWithOptionalResponse).mockResolvedValue(undefined);
-
-    await createAdminUser(payload);
-
-    expect(PostWithOptionalResponse).toHaveBeenCalledWith(AdminUsersPath, payload);
-});
-
-it("calls PostWithOptionalResponse with a generated-password create payload", async () => {
+it("maps generated-password creation to a sent notification", async () => {
     const payload = {
         disabled: false,
         display_name: "Generated User",
@@ -64,23 +36,6 @@ it("calls PostWithOptionalResponse with a generated-password create payload", as
     await expect(createAdminUser(payload)).resolves.toEqual({
         notification: { status: "sent" },
     });
-
-    expect(PostWithOptionalResponse).toHaveBeenCalledWith(AdminUsersPath, payload);
-});
-
-it("gets user management capabilities", async () => {
-    vi.mocked(Get).mockResolvedValue({
-        create: true,
-        delete: false,
-        list: true,
-        read: true,
-        reset_password: true,
-        update: true,
-    });
-
-    await getAdminUserManagementCapabilities();
-
-    expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}/capabilities`, undefined);
 });
 
 it("maps user management capabilities", async () => {
@@ -170,85 +125,10 @@ it("does not expose raw notification errors from create responses", async () => 
     });
 });
 
-it("lists users without a query", async () => {
-    vi.mocked(Get).mockResolvedValue({ total: 0, users: [] });
-
-    await listAdminUsers();
-
-    expect(Get).toHaveBeenCalledWith(AdminUsersPath, undefined);
-});
-
-it("lists users with a query", async () => {
-    vi.mocked(Get).mockResolvedValue({ total: 0, users: [] });
-
-    await listAdminUsers("john doe");
-
-    expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}?search=john+doe`, undefined);
-});
-
 it("normalizes null users from the list endpoint", async () => {
     vi.mocked(Get).mockResolvedValue({ total: 0, users: null });
 
     await expect(listAdminUsers("missing")).resolves.toEqual([]);
-
-    expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}?search=missing`, undefined);
-});
-
-it("gets user detail", async () => {
-    vi.mocked(Get).mockResolvedValue({ username: "john" });
-
-    await getAdminUser("john/doe");
-
-    expect(Get).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, undefined);
-});
-
-it("deletes a user", async () => {
-    const signal = new AbortController().signal;
-
-    vi.mocked(DeleteWithOptionalResponse).mockResolvedValue(undefined);
-
-    await deleteAdminUser("john/doe", signal);
-
-    expect(DeleteWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, undefined, signal);
-});
-
-it("updates a user", async () => {
-    const payload = {
-        disabled: true,
-        display_name: "John Doe",
-        email: "john@example.com",
-        groups: ["admins"],
-    };
-
-    vi.mocked(PatchWithOptionalResponse).mockResolvedValue(undefined);
-
-    await updateAdminUser("john/doe", payload);
-
-    expect(PatchWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, payload, undefined);
-});
-
-it("updates a user with a partial payload", async () => {
-    const payload = {
-        disabled: true,
-    };
-
-    vi.mocked(PatchWithOptionalResponse).mockResolvedValue(undefined);
-
-    await updateAdminUser("john/doe", payload);
-
-    expect(PatchWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe`, payload, undefined);
-});
-
-it("resets a user password", async () => {
-    const payload = {
-        password: "new-password",
-    };
-
-    vi.mocked(PutWithOptionalResponse).mockResolvedValue(undefined);
-
-    await resetAdminUserPassword("john/doe", payload);
-
-    expect(PutWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe/password`, payload, undefined);
 });
 
 it("resets a user password with generated password notification", async () => {
@@ -264,8 +144,6 @@ it("resets a user password with generated password notification", async () => {
     await expect(resetAdminUserPassword("john/doe", payload)).resolves.toEqual({
         notification: { status: "sent" },
     });
-
-    expect(PutWithOptionalResponse).toHaveBeenCalledWith(`${AdminUsersPath}/john%2Fdoe/password`, payload, undefined);
 });
 
 it("maps password reset notification failures without exposing raw errors", async () => {

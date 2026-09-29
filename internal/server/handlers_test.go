@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package server
 
 import (
@@ -245,7 +249,7 @@ func TestHandlerMainWithAuthzEndpoints(t *testing.T) {
 			providers.Random = random.NewMathematical()
 			providers.Templates = provider
 
-			handler, err := handlerMain(t.Context(), config, providers)
+			handler, err := handlerMain(config, providers)
 
 			require.NoError(t, err)
 			assert.NotNil(t, handler)
@@ -360,7 +364,7 @@ func TestHandlerMainWithOptionalFeatures(t *testing.T) {
 				providers.OpenIDConnect = oidc.NewOpenIDConnectProvider(config, nil, provider)
 			}
 
-			handler, err := handlerMain(t.Context(), config, providers)
+			handler, err := handlerMain(config, providers)
 
 			require.NoError(t, err)
 			assert.NotNil(t, handler)
@@ -447,7 +451,7 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 			providers.SessionProvider = session.NewProvider(config.Session, nil)
 			providers.Templates = provider
 
-			handler, err := handlerMain(t.Context(), config, providers)
+			handler, err := handlerMain(config, providers)
 			require.NoError(t, err)
 
 			var sessionCookie string

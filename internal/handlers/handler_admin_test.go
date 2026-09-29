@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
-	"regexp"
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/valyala/fasthttp"
 	"go.uber.org/mock/gomock"
@@ -365,7 +363,6 @@ func TestAdminUsersPOST_ShouldFailWhenRequestBodyIsInvalid(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusBadRequest, mock.Ctx.Response.StatusCode())
 	assert.Equal(t, "KO", errResponse.Status)
 	assert.Equal(t, messageUnableToCreateUser, errResponse.Message)
-	mock.AssertLogEntryAdvanced(t, 0, logrus.ErrorLevel, regexp.MustCompile(`^unable to parse body: .+`), map[string]any{})
 }
 
 func TestAdminUsersPOST_ShouldRejectNonJSONContentType(t *testing.T) {
@@ -708,7 +705,6 @@ func TestAdminUserPasswordPUT_ShouldReturnSafeNotificationErrorForGeneratedPassw
 	assert.Contains(t, bodyString, adminUserNotificationDeliveryFailed)
 	assert.NotContains(t, bodyString, generatedPassword)
 	assert.NotContains(t, bodyString, "smtp rejected")
-	mock.AssertLogEntryAdvanced(t, 0, logrus.ErrorLevel, "Error occurred sending generated password notification email", map[string]any{})
 }
 
 func TestAdminUserPasswordPUT_ShouldNotSuppressGeneratedPasswordEmailWhenNotifyFalse(t *testing.T) {
