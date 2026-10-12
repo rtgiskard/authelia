@@ -426,7 +426,7 @@ const UserManagementView = () => {
     }, [handleResetStateOpening]);
 
     const handleElevationRefresh = useCallback(async () => {
-        const result = await getUserSessionElevation();
+        const result = await getUserSessionElevation("administration");
         setElevation(result);
 
         return result;
@@ -447,7 +447,7 @@ const UserManagementView = () => {
         setElevationCancelled(false);
 
         try {
-            const elevationResult = await getUserSessionElevation();
+            const elevationResult = await getUserSessionElevation("administration");
             setElevation(elevationResult);
 
             if (isElevationSatisfied(elevationResult)) {
@@ -472,7 +472,7 @@ const UserManagementView = () => {
         setElevationCancelled(false);
 
         try {
-            const elevationResult = await getUserSessionElevation();
+            const elevationResult = await getUserSessionElevation("administration");
             setElevation(elevationResult);
 
             if (isElevationSatisfied(elevationResult)) {
@@ -491,12 +491,18 @@ const UserManagementView = () => {
     }, [fetchCapabilities]);
 
     const handleSFDialogClosed = useCallback(
-        (ok: boolean, _changed: boolean) => {
+        (ok: boolean, changed: boolean) => {
             if (!ok) {
                 console.warn("Second Factor dialog close callback failed, it was likely cancelled by the user.");
 
                 handleElevationCancelled();
 
+                return;
+            }
+
+            if (!changed) {
+                setDialogSFOpening(false);
+                setDialogIVOpening(true);
                 return;
             }
 
@@ -512,8 +518,7 @@ const UserManagementView = () => {
                         return;
                     }
 
-                    setCapabilitiesLoading(false);
-                    setDialogIVOpening(true);
+                    handleElevationCancelled();
                 })
                 .catch((error) => {
                     console.error(error);

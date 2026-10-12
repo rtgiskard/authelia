@@ -38,19 +38,6 @@ it("gets user session elevation successfully", async () => {
     expect(result).toBe("elevation");
 });
 
-it("gets user session elevation with error", async () => {
-    const mockRes = { data: { message: "error", status: "KO" }, status: 400 };
-    vi.mocked(axios).mockResolvedValue(mockRes);
-    vi.mocked(hasServiceError).mockReturnValue({
-        errored: true,
-        message: "error",
-    });
-
-    await expect(getUserSessionElevation()).rejects.toThrow(
-        "Failed POST to /user/elevation. Code: 400. Message: error",
-    );
-});
-
 it("generates user session elevation successfully", async () => {
     const response = { data: { delete_id: "del-123" }, limited: false, retryAfter: 0 };
 

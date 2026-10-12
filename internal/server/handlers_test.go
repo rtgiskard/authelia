@@ -382,6 +382,7 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 		method string
 		path   string
 	}{
+		{fasthttp.MethodGet, "/admin/api/v1/session/elevation"},
 		{fasthttp.MethodGet, "/admin/api/v1/users/capabilities"},
 		{fasthttp.MethodGet, "/admin/api/v1/users"},
 		{fasthttp.MethodPost, "/admin/api/v1/users"},
@@ -414,6 +415,23 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 			nil,
 			routes,
 			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldDenyAuthenticatedNonAdministrator",
+			schema.Administration{Enable: true, Users: []string{"admin"}},
+			&session.UserSession{Username: "john"},
+			routes,
+			fasthttp.StatusForbidden,
+		},
+		{
+			"ShouldReturnAdminStatusWithoutEmailElevation",
+			schema.Administration{Enable: true, Users: []string{"john"}},
+			&session.UserSession{Username: "john"},
+			[]struct {
+				method string
+				path   string
+			}{{fasthttp.MethodGet, "/admin/api/v1/session/elevation"}},
+			fasthttp.StatusOK,
 		},
 		{
 			"ShouldReturnBadRequestForAuthorizedUserWithInvalidBody",
@@ -473,7 +491,6 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 				userSession.Username = tc.session.Username
 				userSession.AuthenticationMethodRefs.UsernameAndPassword = true
 				userSession.AuthenticationMethodRefs.WebAuthn = true
-				userSession.Elevations.User = &session.Elevation{ID: 1, Expires: providers.Clock.Now().Add(schema.DefaultSessionConfiguration.Expiration), RemoteIP: net.ParseIP("127.0.0.1")}
 
 				require.NoError(t, sessionProvider.SaveSession(&sessionCtx, userSession))
 
@@ -506,6 +523,9 @@ func TestHandlerMainAdministrationUsersRoute(t *testing.T) {
 					handler(&ctx)
 
 					assert.Equal(t, tc.expectedStatusCode, ctx.Response.StatusCode())
+					if tc.name == "ShouldReturnAdminStatusWithoutEmailElevation" {
+						assert.JSONEq(t, `{"status":"OK","data":{"require_second_factor":false,"skip_second_factor":true,"can_skip_second_factor":false,"factor_knowledge":false,"elevated":false,"expires":0}}`, string(ctx.Response.Body()))
+					}
 				})
 			}
 		})

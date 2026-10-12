@@ -27,6 +27,11 @@ var (
 	errAdminGeneratedPasswordPolicyFail = errors.New("generated password did not meet the password policy")
 )
 
+// AdminUserSessionElevationGET returns the administrator session elevation status.
+func AdminUserSessionElevationGET(ctx *middlewares.AutheliaCtx) {
+	userSessionElevationGET(ctx, true)
+}
+
 // AdminUsersPOST is the administrator user creation endpoint.
 func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 	if !adminRequireJSONContentType(ctx) {

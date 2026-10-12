@@ -217,7 +217,12 @@ func handlerMain(config *schema.Configuration, providers middlewares.Providers) 
 
 	middlewareAdministration := middlewares.NewBridgeBuilder(*config, providers).
 		WithPreMiddlewares(middlewares.SecurityHeadersBase, middlewares.SecurityHeadersNoStore, middlewares.SecurityHeadersCSPNone).
-		WithPostMiddlewares(middlewares.RequireElevated, middlewares.RequireAdministration).
+		WithPostMiddlewares(middlewares.RequireAdministrationElevated, middlewares.RequireAdministration).
+		Build()
+
+	middlewareAdministration1FA := middlewares.NewBridgeBuilder(*config, providers).
+		WithPreMiddlewares(middlewares.SecurityHeadersBase, middlewares.SecurityHeadersNoStore, middlewares.SecurityHeadersCSPNone).
+		WithPostMiddlewares(middlewares.Require1FA, middlewares.RequireAdministration).
 		Build()
 
 	r.HEAD("/api/health", middlewareAPI(handlers.HealthGET))
@@ -239,6 +244,7 @@ func handlerMain(config *schema.Configuration, providers middlewares.Providers) 
 	r.GET("/api/configuration/password-policy", middlewareAPI(handlers.PasswordPolicyConfigurationGET))
 
 	if config.Administration.Enable {
+		r.GET("/admin/api/v1/session/elevation", middlewareAdministration1FA(handlers.AdminUserSessionElevationGET))
 		r.GET("/admin/api/v1/users/capabilities", middlewareAdministration(handlers.AdminUserCapabilitiesGET))
 		r.GET("/admin/api/v1/users", middlewareAdministration(handlers.AdminUsersGET))
 		r.POST("/admin/api/v1/users", middlewareAdministration(handlers.AdminUsersPOST))

@@ -894,6 +894,33 @@ paths:
           description: Forbidden
       security:
         - authelia_auth: []
+  /admin/api/v1/session/elevation:
+    get:
+      operationId: getAdminUserSessionElevation
+      tags:
+        - User Elevation
+      summary: Administrator Session Elevation
+      description: >
+        Returns the verification status for administrator user management. Available only when administration
+        is enabled, and requires first-factor authentication and administrator authorization. Completed second-factor
+        authentication satisfies this scoped policy independently of the global skip_second_factor setting.
+        When second-factor authentication is optional and configured, can_skip_second_factor permits the user
+        to choose either a configured second-factor method or email verification. Failed or cancelled second-factor
+        authentication does not automatically initiate email verification. Email verification uses the existing
+        user session elevation endpoints and retains the configured require_second_factor policy.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.ElevationStatus.Response'
+        "403":
+          description: Forbidden
+        "404":
+          description: Administration is disabled
+      security:
+        - authelia_auth: []
   /api/user/session/elevation:
     get:
       operationId: getUserSessionElevation

@@ -165,6 +165,18 @@ func TestRequireElevated(t *testing.T) {
 			false,
 		},
 		{
+			"ShouldRequireElevationForTwoFactorWhenSkipDisabled",
+			authentication.TwoFactor,
+			nil,
+			false,
+			false,
+			nil,
+			fasthttp.StatusForbidden,
+			false,
+			false,
+			true,
+		},
+		{
 			"ShouldRequireElevation1FAUser",
 			authentication.OneFactor,
 			nil,
@@ -472,7 +484,7 @@ func TestRequireElevatedAdministrationChain(t *testing.T) {
 				tc.setup(mock)
 			}
 
-			handler := middlewares.RequireElevated(middlewares.RequireAdministration(NilHandler))
+			handler := middlewares.RequireAdministrationElevated(middlewares.RequireAdministration(NilHandler))
 
 			handler(mock.Ctx)
 
@@ -488,6 +500,98 @@ func TestRequireElevatedAdministrationChain(t *testing.T) {
 
 				require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), data))
 				assert.True(t, data.Data.Elevation)
+			}
+		})
+	}
+}
+
+func TestRequireAdministrationElevated(t *testing.T) {
+	testCases := []struct {
+		name       string
+		level      authentication.Level
+		authorized bool
+		require2FA bool
+		has2FA     bool
+		lookupErr  error
+		elevated   bool
+		expires    time.Duration
+		ip         string
+		expected   int
+		first      bool
+		second     bool
+		elevation  bool
+	}{
+		{name: "Anonymous", authorized: true, expected: fasthttp.StatusForbidden, first: true},
+		{name: "OneFactorWithoutElevation", level: authentication.OneFactor, authorized: true, expected: fasthttp.StatusForbidden, elevation: true},
+		{name: "TwoFactorWithoutElevation", level: authentication.TwoFactor, authorized: true, expected: fasthttp.StatusOK},
+		{name: "TwoFactorWithRequiredPolicy", level: authentication.TwoFactor, authorized: true, require2FA: true, expected: fasthttp.StatusOK},
+		{name: "TwoFactorWithoutAuthorization", level: authentication.TwoFactor, expected: fasthttp.StatusForbidden},
+		{name: "EmailElevation", level: authentication.OneFactor, authorized: true, elevated: true, expires: time.Minute, ip: "127.0.0.1", expected: fasthttp.StatusOK},
+		{name: "EmailElevationWithoutAuthorization", level: authentication.OneFactor, elevated: true, expires: time.Minute, ip: "127.0.0.1", expected: fasthttp.StatusForbidden},
+		{name: "ExpiredEmailElevation", level: authentication.OneFactor, authorized: true, elevated: true, expires: -time.Minute, ip: "127.0.0.1", expected: fasthttp.StatusForbidden, elevation: true},
+		{name: "EmailElevationWrongIP", level: authentication.OneFactor, authorized: true, elevated: true, expires: time.Minute, ip: "127.0.0.2", expected: fasthttp.StatusForbidden, elevation: true},
+		{name: "RequiredSecondFactorDeniesEmail", level: authentication.OneFactor, authorized: true, require2FA: true, has2FA: true, elevated: true, expires: time.Minute, ip: "127.0.0.1", expected: fasthttp.StatusForbidden, second: true},
+		{name: "RequiredSecondFactorLookupError", level: authentication.OneFactor, authorized: true, require2FA: true, lookupErr: errors.New("lookup failed"), elevated: true, expires: time.Minute, ip: "127.0.0.1", expected: fasthttp.StatusForbidden, second: true},
+		{name: "RequiredSecondFactorNotConfiguredAllowsEmail", level: authentication.OneFactor, authorized: true, require2FA: true, elevated: true, expires: time.Minute, ip: "127.0.0.1", expected: fasthttp.StatusOK},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := mocks.NewMockAutheliaCtx(t)
+			defer mock.Close()
+
+			mock.Ctx.Providers.Clock = &mock.Clock
+			mock.Ctx.Request.Header.Set(fasthttp.HeaderXForwardedFor, "127.0.0.1")
+			mock.Ctx.Configuration.Administration = schema.Administration{Enable: true}
+			if tc.authorized {
+				mock.Ctx.Configuration.Administration.Users = []string{john}
+			}
+			mock.Ctx.Configuration.IdentityValidation.ElevatedSession = schema.IdentityValidationElevatedSession{RequireSecondFactor: tc.require2FA}
+			policy := mock.Ctx.Configuration.IdentityValidation.ElevatedSession
+
+			userSession, err := mock.Ctx.GetSession()
+			require.NoError(t, err)
+			if tc.level >= authentication.OneFactor {
+				userSession.Username = john
+				userSession.AuthenticationMethodRefs.UsernameAndPassword = true
+				userSession.AuthenticationMethodRefs.WebAuthn = tc.level >= authentication.TwoFactor
+			}
+			if tc.elevated {
+				userSession.Elevations.User = &session.Elevation{ID: 1, Expires: mock.Clock.Now().Add(tc.expires), RemoteIP: net.ParseIP(tc.ip)}
+			}
+			require.NoError(t, mock.Ctx.SaveSession(userSession))
+
+			if tc.require2FA && tc.level == authentication.OneFactor {
+				mock.StorageMock.EXPECT().LoadUserInfo(mock.Ctx, john).Return(model.UserInfo{HasTOTP: tc.has2FA}, tc.lookupErr)
+			}
+
+			handler := middlewares.RequireAdministrationElevated(middlewares.RequireAdministration(NilHandler))
+			handler(mock.Ctx)
+
+			assert.Equal(t, tc.expected, mock.Ctx.Response.StatusCode())
+			assert.Equal(t, policy, mock.Ctx.Configuration.IdentityValidation.ElevatedSession)
+			if tc.expected == fasthttp.StatusOK {
+				assert.Equal(t, "Example Nil", string(mock.Ctx.Response.Body()))
+			} else if tc.first || tc.second || tc.elevation {
+				var response struct {
+					Data middlewares.ElevatedForbiddenResponse `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), &response))
+				assert.Equal(t, tc.first, response.Data.FirstFactor)
+				assert.Equal(t, tc.second, response.Data.SecondFactor)
+				assert.Equal(t, tc.elevation, response.Data.Elevation)
+			} else {
+				var response struct {
+					Data middlewares.AdministrationForbiddenResponse `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), &response))
+				assert.True(t, response.Data.Authorization)
+			}
+
+			if tc.elevation && tc.elevated {
+				userSession, err = mock.Ctx.GetSession()
+				require.NoError(t, err)
+				assert.Nil(t, userSession.Elevations.User)
 			}
 		})
 	}

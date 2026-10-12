@@ -26,6 +26,10 @@ func Require1FA(next RequestHandler) RequestHandler {
 
 // RequireElevated requires various elevation criteria.
 func RequireElevated(next RequestHandler) RequestHandler {
+	return requireElevated(next, false)
+}
+
+func requireElevated(next RequestHandler, skipSecondFactor bool) RequestHandler {
 	return func(ctx *AutheliaCtx) {
 		var (
 			userSession session.UserSession
@@ -51,7 +55,7 @@ func RequireElevated(next RequestHandler) RequestHandler {
 			return
 		}
 
-		if !handleRequireElevatedShouldDoNext(ctx, &userSession) {
+		if !handleRequireElevatedShouldDoNext(ctx, &userSession, skipSecondFactor || ctx.Configuration.IdentityValidation.ElevatedSession.SkipSecondFactor) {
 			return
 		}
 
@@ -59,12 +63,12 @@ func RequireElevated(next RequestHandler) RequestHandler {
 	}
 }
 
-func handleRequireElevatedShouldDoNext(ctx *AutheliaCtx, userSession *session.UserSession) (doNext bool) {
+func handleRequireElevatedShouldDoNext(ctx *AutheliaCtx, userSession *session.UserSession, skipSecondFactor bool) (doNext bool) {
 	var err error
 
 	level := userSession.AuthenticationLevel(ctx.Configuration.WebAuthn.EnablePasskey2FA)
 
-	if ctx.Configuration.IdentityValidation.ElevatedSession.SkipSecondFactor && level >= authentication.TwoFactor {
+	if skipSecondFactor && level >= authentication.TwoFactor {
 		ctx.Logger.WithFields(map[string]any{"user": userSession.Username}).Trace("The user session elevation was not checked as the user has performed second factor authentication and the policy to skip this is enabled.")
 
 		return true

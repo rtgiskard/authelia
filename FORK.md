@@ -56,6 +56,17 @@ Identity verification retains upstream's cancellation guard: a verification resp
 not complete the parent action. Failed verification re-enables the input and controls while preserving fork code
 generation guards and rate-limit feedback.
 
+User management accepts either completed second-factor authentication or email session elevation. When second-factor
+verification is optional and a method is configured, the administrator chooses the method explicitly; failed or
+cancelled second-factor authentication never falls back to email. Without a configured method, only email verification
+is offered. A configured `identity_validation.elevated_session.require_second_factor` policy still applies to email
+elevation. Existing two-factor sessions enter management without an additional email challenge.
+
+This policy is scoped to administrator routes. `GET /admin/api/v1/session/elevation` requires first-factor authentication
+and administrator authorization, while user-management operations require both administrator authorization and the
+selected verification. Other settings keep the global elevated-session policy; do not enable global
+`skip_second_factor` merely to use this management flow.
+
 Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
 normalization, and elevation rate-limit feedback remain supported.
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	"go.uber.org/mock/gomock"
 
@@ -14,8 +15,123 @@ import (
 	"github.com/authelia/authelia/v4/internal/configuration/schema"
 	"github.com/authelia/authelia/v4/internal/middlewares"
 	"github.com/authelia/authelia/v4/internal/mocks"
+	"github.com/authelia/authelia/v4/internal/model"
 	"github.com/authelia/authelia/v4/internal/templates"
 )
+
+func TestAdminUserSessionElevationGET(t *testing.T) {
+	testCases := []struct {
+		name    string
+		twoFA   bool
+		has2FA  bool
+		require bool
+		skip    bool
+		loadErr error
+		admin   bodyGETUserSessionElevate
+		generic bodyGETUserSessionElevate
+	}{
+		{
+			name: "OptionalConfiguredSecondFactorOffersChoice", has2FA: true,
+			admin:   bodyGETUserSessionElevate{CanSkipSecondFactor: true, FactorKnowledge: true},
+			generic: bodyGETUserSessionElevate{FactorKnowledge: true},
+		},
+		{
+			name: "OptionalConfiguredSecondFactorWithGlobalSkip", has2FA: true, skip: true,
+			admin:   bodyGETUserSessionElevate{CanSkipSecondFactor: true, FactorKnowledge: true},
+			generic: bodyGETUserSessionElevate{CanSkipSecondFactor: true, FactorKnowledge: true},
+		},
+		{
+			name:    "NoConfiguredSecondFactorUsesEmail",
+			admin:   bodyGETUserSessionElevate{FactorKnowledge: true},
+			generic: bodyGETUserSessionElevate{FactorKnowledge: true},
+		},
+		{
+			name: "RequiredConfiguredSecondFactorDoesNotOfferEmail", has2FA: true, require: true,
+			admin:   bodyGETUserSessionElevate{RequireSecondFactor: true, FactorKnowledge: true},
+			generic: bodyGETUserSessionElevate{RequireSecondFactor: true, FactorKnowledge: true},
+		},
+		{
+			name: "RequiredWithoutConfiguredSecondFactorUsesEmail", require: true,
+			admin:   bodyGETUserSessionElevate{FactorKnowledge: true},
+			generic: bodyGETUserSessionElevate{FactorKnowledge: true},
+		},
+		{
+			name: "RequiredSecondFactorLookupFailureDoesNotOfferEmail", require: true, loadErr: fmt.Errorf("lookup failed"),
+			admin:   bodyGETUserSessionElevate{RequireSecondFactor: true, FactorKnowledge: true},
+			generic: bodyGETUserSessionElevate{RequireSecondFactor: true, FactorKnowledge: true},
+		},
+		{
+			name: "CompletedSecondFactorSkipsEmailOnlyForAdministration", twoFA: true,
+			admin: bodyGETUserSessionElevate{SkipSecondFactor: true},
+		},
+		{
+			name: "CompletedRequiredSecondFactorSkipsEmailOnlyForAdministration", twoFA: true, require: true,
+			admin: bodyGETUserSessionElevate{SkipSecondFactor: true},
+		},
+		{
+			name: "CompletedSecondFactorWithGlobalSkip", twoFA: true, skip: true,
+			admin:   bodyGETUserSessionElevate{SkipSecondFactor: true},
+			generic: bodyGETUserSessionElevate{SkipSecondFactor: true},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := mocks.NewMockAutheliaCtx(t)
+			defer mock.Close()
+
+			mock.Ctx.Configuration.Administration = schema.Administration{Enable: true, Users: []string{testUsername}}
+			mock.Ctx.Configuration.IdentityValidation.ElevatedSession = schema.IdentityValidationElevatedSession{RequireSecondFactor: tc.require, SkipSecondFactor: tc.skip}
+			policy := mock.Ctx.Configuration.IdentityValidation.ElevatedSession
+			us, err := mock.Ctx.GetSession()
+			require.NoError(t, err)
+			us.Username = testUsername
+			us.AuthenticationMethodRefs.UsernameAndPassword = true
+			us.AuthenticationMethodRefs.WebAuthn = tc.twoFA
+			require.NoError(t, mock.Ctx.SaveSession(us))
+
+			if !tc.twoFA {
+				mock.StorageMock.EXPECT().LoadUserInfo(mock.Ctx, testUsername).Return(model.UserInfo{HasTOTP: tc.has2FA}, tc.loadErr).Times(2)
+			}
+
+			handler := middlewares.Require1FA(middlewares.RequireAdministration(AdminUserSessionElevationGET))
+			handler(mock.Ctx)
+			assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
+			var response struct {
+				Data bodyGETUserSessionElevate `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), &response))
+			assert.Equal(t, tc.admin, response.Data)
+			assert.Equal(t, policy, mock.Ctx.Configuration.IdentityValidation.ElevatedSession)
+
+			UserSessionElevationGET(mock.Ctx)
+			assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
+			require.NoError(t, json.Unmarshal(mock.Ctx.Response.Body(), &response))
+			assert.Equal(t, tc.generic, response.Data)
+		})
+	}
+}
+
+func TestAdminUserSessionElevationGET_ShouldRequireAuthorizedAuthenticatedAdministrator(t *testing.T) {
+	for _, level := range []authentication.Level{authentication.NotAuthenticated, authentication.OneFactor, authentication.TwoFactor} {
+		t.Run(fmt.Sprintf("AuthenticationLevel%d", level), func(t *testing.T) {
+			mock := mocks.NewMockAutheliaCtx(t)
+			defer mock.Close()
+
+			mock.Ctx.Configuration.Administration = schema.Administration{Enable: true, Users: []string{"another-admin"}}
+			us, err := mock.Ctx.GetSession()
+			require.NoError(t, err)
+			us.Username = testUsername
+			us.AuthenticationMethodRefs.UsernameAndPassword = level >= authentication.OneFactor
+			us.AuthenticationMethodRefs.WebAuthn = level >= authentication.TwoFactor
+			require.NoError(t, mock.Ctx.SaveSession(us))
+
+			handler := middlewares.Require1FA(middlewares.RequireAdministration(AdminUserSessionElevationGET))
+			handler(mock.Ctx)
+			assert.Equal(t, fasthttp.StatusForbidden, mock.Ctx.Response.StatusCode())
+		})
+	}
+}
 
 func TestAdminUsersPOST_ShouldSucceed(t *testing.T) {
 	mock := mocks.NewMockAutheliaCtx(t)

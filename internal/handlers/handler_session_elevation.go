@@ -22,9 +22,12 @@ import (
 )
 
 // UserSessionElevationGET returns the session elevation status.
-//
-//nolint:gocyclo
 func UserSessionElevationGET(ctx *middlewares.AutheliaCtx) {
+	userSessionElevationGET(ctx, ctx.Configuration.IdentityValidation.ElevatedSession.SkipSecondFactor)
+}
+
+//nolint:gocyclo
+func userSessionElevationGET(ctx *middlewares.AutheliaCtx, skipSecondFactor bool) {
 	var (
 		userSession session.UserSession
 		err         error
@@ -52,7 +55,7 @@ func UserSessionElevationGET(ctx *middlewares.AutheliaCtx) {
 
 	switch level := userSession.AuthenticationLevel(ctx.Configuration.WebAuthn.EnablePasskey2FA); {
 	case level >= authentication.TwoFactor:
-		if ctx.Configuration.IdentityValidation.ElevatedSession.SkipSecondFactor {
+		if skipSecondFactor {
 			response.SkipSecondFactor = true
 		}
 	case level == authentication.OneFactor:
@@ -71,7 +74,7 @@ func UserSessionElevationGET(ctx *middlewares.AutheliaCtx) {
 			if err != nil || has {
 				response.RequireSecondFactor = true
 			}
-		} else if ctx.Configuration.IdentityValidation.ElevatedSession.SkipSecondFactor && has {
+		} else if skipSecondFactor && has {
 			response.CanSkipSecondFactor = true
 		}
 	}

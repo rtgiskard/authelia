@@ -5,7 +5,13 @@
 import axios from "axios";
 
 import type { ErrorResponse, OKResponse, ServiceResponse } from "@services/Api";
-import { UserSessionElevationPath, hasServiceError, toData, validateStatusOneTimeCode } from "@services/Api";
+import {
+    AdminSessionElevationPath,
+    UserSessionElevationPath,
+    hasServiceError,
+    toData,
+    validateStatusOneTimeCode,
+} from "@services/Api";
 import { PostWithOptionalResponseRateLimited } from "@services/Client";
 
 export interface UserSessionElevation {
@@ -21,16 +27,15 @@ export interface UserSessionElevationGenerateData {
     delete_id: string;
 }
 
-export async function getUserSessionElevation() {
+export async function getUserSessionElevation(scope: "administration" | "user" = "user") {
+    const path = scope === "administration" ? AdminSessionElevationPath : UserSessionElevationPath;
     const res = await axios<ServiceResponse<UserSessionElevation>>({
         method: "GET",
-        url: UserSessionElevationPath,
+        url: path,
     });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
-        throw new Error(
-            `Failed POST to ${UserSessionElevationPath}. Code: ${res.status}. Message: ${hasServiceError(res).message}`,
-        );
+        throw new Error(`Failed GET to ${path}. Code: ${res.status}. Message: ${hasServiceError(res).message}`);
     }
 
     return toData<UserSessionElevation>(res);

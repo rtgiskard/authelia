@@ -40,6 +40,9 @@ const SecondFactorDialogMock = ({ handleClosed, opening }: SecondFactorDialogMoc
             <button type="button" onClick={() => handleClosed(true, false)}>
                 sf-success
             </button>
+            <button type="button" onClick={() => handleClosed(true, true)}>
+                sf-authenticated
+            </button>
             <button type="button" onClick={() => handleClosed(false, false)}>
                 sf-cancel
             </button>
@@ -553,6 +556,35 @@ it("gates capabilities behind elevation and walks through second factor then ide
     });
 });
 
+it.each([true, false])("does not switch a completed 2FA attempt to email (accepted: %s)", async (accepted) => {
+    const pending: UserSessionElevation = {
+        can_skip_second_factor: true,
+        elevated: false,
+        expires: 0,
+        factor_knowledge: true,
+        require_second_factor: false,
+        skip_second_factor: false,
+    };
+    vi.mocked(getUserSessionElevation)
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValueOnce({ ...pending, skip_second_factor: accepted });
+
+    render(<UserManagementView />);
+    await screen.findByText("Verification");
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    fireEvent.click(await screen.findByText("sf-authenticated"));
+    await waitFor(() => expect(screen.queryByTestId("second-factor-dialog")).not.toBeInTheDocument());
+
+    if (accepted) {
+        await screen.findByText("No Users Yet");
+    } else {
+        await screen.findByText("Verification");
+        expect(getAdminUserManagementCapabilities).not.toHaveBeenCalled();
+    }
+    expect(screen.queryByTestId("identity-dialog")).not.toBeInTheDocument();
+});
+
 it("cancels elevation without surfacing a capabilities error", async () => {
     vi.mocked(getUserSessionElevation)
         .mockResolvedValueOnce({
@@ -880,53 +912,4 @@ it("shows delete action when supported and deletes after confirmation", async ()
     await waitFor(() => {
         expect(listAdminUsers).toHaveBeenCalledTimes(2);
     });
-});
-
-it("keeps a visible state between second-factor success and identity verification", async () => {
-    let resolveRefresh: (value: UserSessionElevation) => void = () => {};
-    const pendingRefresh = new Promise<UserSessionElevation>((resolve) => {
-        resolveRefresh = resolve;
-    });
-
-    vi.mocked(getUserSessionElevation)
-        .mockResolvedValueOnce({
-            can_skip_second_factor: false,
-            elevated: false,
-            expires: 0,
-            factor_knowledge: false,
-            require_second_factor: true,
-            skip_second_factor: false,
-        })
-        .mockResolvedValueOnce({
-            can_skip_second_factor: false,
-            elevated: false,
-            expires: 0,
-            factor_knowledge: false,
-            require_second_factor: true,
-            skip_second_factor: false,
-        })
-        .mockReturnValueOnce(pendingRefresh);
-
-    render(<UserManagementView />);
-
-    expect(await screen.findByText("Verification", {}, { timeout: 3000 })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
-    await screen.findByTestId("second-factor-dialog", {}, { timeout: 3000 });
-
-    fireEvent.click(screen.getByRole("button", { name: "sf-success" }));
-
-    expect(await screen.findByText("Loading User Management", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText("Checking which user management features are available")).toBeInTheDocument();
-
-    resolveRefresh({
-        can_skip_second_factor: false,
-        elevated: false,
-        expires: 0,
-        factor_knowledge: false,
-        require_second_factor: true,
-        skip_second_factor: false,
-    });
-
-    await screen.findByTestId("identity-dialog", {}, { timeout: 3000 });
 });

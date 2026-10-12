@@ -6,6 +6,11 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+// RequireAdministrationElevated accepts second factor authentication or the configured session elevation criteria.
+func RequireAdministrationElevated(next RequestHandler) RequestHandler {
+	return requireElevated(next, true)
+}
+
 // RequireAdministration requires an explicitly configured administrator subject.
 func RequireAdministration(next RequestHandler) RequestHandler {
 	return func(ctx *AutheliaCtx) {
