@@ -913,6 +913,62 @@ it("sorts users by status from the status header", async () => {
     expect(within(screen.getAllByRole("row")[1]).getByText("bob")).toBeInTheDocument();
 });
 
+it("sorts by username and creation time with unknown dates last and stable ties", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue(
+        [
+            { created_at: "2026-01-01T00:00:00Z", username: "zulu" },
+            { created_at: null, username: "alpha" },
+            { created_at: "2026-02-01T00:00:00Z", username: "beta" },
+            { created_at: "2026-02-01T08:00:00+08:00", username: "charlie" },
+            { username: "delta" },
+        ].map((user) => ({
+            disabled: false,
+            display_name: user.username,
+            email: `${user.username}@example.com`,
+            groups: [],
+            ...user,
+        })),
+    );
+    render(<UserManagementView />);
+    await screen.findByRole("button", { name: "Added Time" });
+    const names = () =>
+        screen
+            .getAllByRole("row")
+            .slice(1)
+            .map((row) => row.querySelector("td")?.textContent);
+    fireEvent.click(screen.getByRole("button", { name: "Added Time" }));
+    expect(names()).toEqual(["beta", "charlie", "zulu", "alpha", "delta"]);
+    expect(screen.getByRole("columnheader", { name: "Added Time" })).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(screen.getByRole("button", { name: "Added Time" }));
+    expect(names()).toEqual(["zulu", "beta", "charlie", "alpha", "delta"]);
+    fireEvent.click(screen.getByRole("button", { name: "Username" }));
+    expect(names()).toEqual(["alpha", "beta", "charlie", "delta", "zulu"]);
+    expect(screen.getByRole("columnheader", { name: "Added Time" })).toHaveAttribute("aria-sort", "none");
+    fireEvent.click(screen.getByRole("button", { name: "Username" }));
+    expect(names()).toEqual(["zulu", "delta", "charlie", "beta", "alpha"]);
+});
+
+it("sorts the full collection before pagination and returns to the first page", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue(
+        Array.from({ length: 21 }, (_, index) => ({
+            created_at: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+            disabled: false,
+            display_name: `User ${index}`,
+            email: `user${index}@example.com`,
+            groups: [],
+            username: `user-${String(index).padStart(2, "0")}`,
+        })),
+    );
+    render(<UserManagementView />);
+    await screen.findByText("user-00");
+    fireEvent.click(screen.getByLabelText("Go to next page"));
+    expect(await screen.findByText("user-20")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Added Time" }));
+    expect(within(screen.getAllByRole("row")[1]).getByText("user-20")).toBeInTheDocument();
+    expect(screen.getByText("user-01")).toBeInTheDocument();
+    expect(screen.queryByText("user-00")).not.toBeInTheDocument();
+});
+
 it("resets a user password with a generated password notification payload", async () => {
     vi.mocked(listAdminUsers).mockResolvedValue([
         {

@@ -58,6 +58,12 @@ the timestamp as an RFC 3339 date-time when known; it is not a writable API fiel
 are not backfilled and display Unknown. Desktop lists and mobile cards show Added Time in the browser's local timezone,
 including the Simplified Chinese 添加时间 label. Deleting and recreating a user records a new creation time.
 
+Desktop user lists support ascending and descending sorting by Username, Added Time, or Status before pagination.
+The existing enabled-first status order remains the default. Added Time initially shows newest users first, keeps
+unknown times last in both directions, and breaks equal-time ties by username. Changing sort returns to the first page.
+Sortable headers show a muted bidirectional arrow when inactive and a higher-contrast up/down arrow for the active
+ascending/descending sort, while retaining `aria-sort` for assistive technology.
+
 Identity verification retains upstream's cancellation guard: a verification response received after cancellation must
 not complete the parent action. Failed verification re-enables the input and controls while preserving fork code
 generation guards and rate-limit feedback.

@@ -11,6 +11,9 @@ import {
 
 import axios from "axios";
 import {
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
     ChevronLeft,
     ChevronRight,
     KeyRound,
@@ -191,7 +194,8 @@ const defaultPasswordPolicy: PasswordPolicyConfiguration = {
 
 const rowsPerPageOptions = [10, 20, 40, 60];
 
-type StatusSortDirection = "asc" | "desc";
+type UserSortField = "created_at" | "status" | "username";
+type UserSort = { field: UserSortField; direction: "asc" | "desc" };
 
 const toGroupsArray = (value: string) =>
     value
@@ -331,7 +335,7 @@ const UserManagementView = () => {
     const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicyConfiguration>(defaultPasswordPolicy);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(20);
-    const [statusSortDirection, setStatusSortDirection] = useState<StatusSortDirection>("asc");
+    const [sort, setSort] = useState<UserSort>({ direction: "asc", field: "status" });
 
     const isSupported = capabilities?.supported ?? false;
     const canList = capabilities?.can_list ?? false;
@@ -346,17 +350,32 @@ const UserManagementView = () => {
     const sortedUsers = useMemo(() => {
         const nextUsers = [...users];
         nextUsers.sort((a, b) => {
-            if (a.disabled === b.disabled) {
-                return a.username.localeCompare(b.username);
+            const usernameOrder = a.username.localeCompare(b.username);
+            let result: number;
+
+            switch (sort.field) {
+                case "username":
+                    result = usernameOrder;
+                    break;
+                case "created_at": {
+                    const aTime = a.created_at ? Date.parse(a.created_at) : NaN;
+                    const bTime = b.created_at ? Date.parse(b.created_at) : NaN;
+                    const aKnown = Number.isFinite(aTime);
+                    const bKnown = Number.isFinite(bTime);
+
+                    if (aKnown !== bKnown) return aKnown ? -1 : 1;
+                    result = aKnown && bKnown ? aTime - bTime : 0;
+                    break;
+                }
+                default:
+                    result = Number(a.disabled) - Number(b.disabled);
             }
 
-            const result = a.disabled ? 1 : -1;
-
-            return statusSortDirection === "asc" ? result : -result;
+            return result === 0 ? usernameOrder : sort.direction === "asc" ? result : -result;
         });
 
         return nextUsers;
-    }, [statusSortDirection, users]);
+    }, [sort, users]);
     const pagedUsers = useMemo(
         () => sortedUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
         [page, rowsPerPage, sortedUsers],
@@ -886,8 +905,18 @@ const UserManagementView = () => {
         setToggleConfirmOpen(true);
     };
 
-    const handleStatusSort = () => {
-        setStatusSortDirection((previous) => (previous === "asc" ? "desc" : "asc"));
+    const handleSort = (field: UserSortField) => {
+        setSort((previous) => ({
+            direction:
+                previous.field === field
+                    ? previous.direction === "asc"
+                        ? "desc"
+                        : "asc"
+                    : field === "created_at"
+                      ? "desc"
+                      : "asc",
+            field,
+        }));
         setPage(0);
     };
 
@@ -1242,9 +1271,9 @@ const UserManagementView = () => {
                                                         onDelete={openDeleteDialog}
                                                         onEdit={openEditDialog}
                                                         onResetPassword={openPasswordResetDialog}
-                                                        onStatusSort={handleStatusSort}
+                                                        onSort={handleSort}
                                                         onToggle={openToggleDialog}
-                                                        statusSortDirection={statusSortDirection}
+                                                        sort={sort}
                                                         translate={translate}
                                                         users={pagedUsers}
                                                     />
@@ -1712,9 +1741,20 @@ interface UserCollectionProps {
 }
 
 interface UserTableProps extends UserCollectionProps {
-    onStatusSort: () => void;
-    statusSortDirection: StatusSortDirection;
+    onSort: (field: UserSortField) => void;
+    sort: UserSort;
 }
+
+const SortIndicator = ({ active, direction }: { active: boolean; direction: UserSort["direction"] }) => {
+    const Icon = active ? (direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+
+    return (
+        <Icon
+            aria-hidden="true"
+            className={`size-3.5 shrink-0 ${active ? "text-foreground" : "text-muted-foreground"}`}
+        />
+    );
+};
 
 const UserTable = ({
     canDelete,
@@ -1723,9 +1763,9 @@ const UserTable = ({
     onDelete,
     onEdit,
     onResetPassword,
-    onStatusSort,
+    onSort,
     onToggle,
-    statusSortDirection,
+    sort,
     translate,
     users,
 }: UserTableProps) => (
@@ -1733,17 +1773,59 @@ const UserTable = ({
         <table className="w-full text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr className="border-b">
-                    <th className="px-4 py-3 font-semibold">{translate("Username")}</th>
+                    <th
+                        aria-sort={
+                            sort.field === "username" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"
+                        }
+                        className="px-4 py-3 font-semibold"
+                    >
+                        <Button
+                            className="-ml-3 h-7 px-3 text-xs"
+                            onClick={() => onSort("username")}
+                            size="sm"
+                            variant="ghost"
+                        >
+                            {translate("Username")}
+                            <SortIndicator active={sort.field === "username"} direction={sort.direction} />
+                        </Button>
+                    </th>
                     <th className="px-4 py-3 font-semibold">{translate("Display Name")}</th>
                     <th className="px-4 py-3 font-semibold">{translate("Email")}</th>
                     <th className="px-4 py-3 font-semibold">{translate("Groups")}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">{translate("Added Time")}</th>
                     <th
-                        aria-sort={statusSortDirection === "asc" ? "ascending" : "descending"}
+                        aria-sort={
+                            sort.field === "created_at"
+                                ? sort.direction === "asc"
+                                    ? "ascending"
+                                    : "descending"
+                                : "none"
+                        }
+                        className="whitespace-nowrap px-4 py-3 font-semibold"
+                    >
+                        <Button
+                            className="-ml-3 h-7 px-3 text-xs"
+                            onClick={() => onSort("created_at")}
+                            size="sm"
+                            variant="ghost"
+                        >
+                            {translate("Added Time")}
+                            <SortIndicator active={sort.field === "created_at"} direction={sort.direction} />
+                        </Button>
+                    </th>
+                    <th
+                        aria-sort={
+                            sort.field === "status" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"
+                        }
                         className="px-4 py-3 font-semibold"
                     >
-                        <Button className="-ml-3 h-7 px-3 text-xs" onClick={onStatusSort} size="sm" variant="ghost">
+                        <Button
+                            className="-ml-3 h-7 px-3 text-xs"
+                            onClick={() => onSort("status")}
+                            size="sm"
+                            variant="ghost"
+                        >
                             {translate("Status")}
+                            <SortIndicator active={sort.field === "status"} direction={sort.direction} />
                         </Button>
                     </th>
                     <th className="px-4 py-3 text-right font-semibold">{translate("Actions")}</th>
