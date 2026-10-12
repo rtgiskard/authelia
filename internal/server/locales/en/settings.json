@@ -2,6 +2,7 @@
 	"{{algorithm}}, {{digits}} digits, {{seconds}} seconds": "{{algorithm}}, {{digits}} digits, {{seconds}} seconds",
 	"A WebAuthn Credential with that Description already exists": "A WebAuthn Credential with that Description already exists",
 	"Add": "Add",
+	"Added Time": "Added Time",
 	"Added when": "Added {{when, datetime}}",
 	"Added": "Added",
 	"added": "added",

@@ -14,6 +14,12 @@
           "type": "object",
           "title": "Users",
           "description": "The dictionary of users."
+        },
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "title": "JSON Schema",
+          "description": "The JSON Schema which applies to this file."
         }
       },
       "additionalProperties": false,
@@ -122,6 +128,12 @@
           "title": "Disabled",
           "description": "The disabled status for the user.",
           "default": false
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Created At",
+          "description": "The time the user was created, if known."
         },
         "address": {
           "$ref": "#/$defs/FileUserDatabaseUserDetailsAddressModel",

@@ -1058,6 +1058,132 @@ func TestFileUserProviderCreateUserShouldPreserveConcurrentDuplicateError(t *tes
 	})
 }
 
+func TestFileUserProviderCreatedAtLifecycle(t *testing.T) {
+	knownCreatedAt := time.Date(2020, time.January, 2, 3, 4, 5, 123456789, time.UTC)
+
+	for _, filename := range []string{"users.yml", "users.yaml", "users.toml", "users.json"} {
+		t.Run(filename, func(t *testing.T) {
+			hash, err := bcrypt.New(bcrypt.WithCost(10))
+			require.NoError(t, err)
+			digest, err := hash.Hash("original-password")
+			require.NoError(t, err)
+
+			path := filepath.Join(t.TempDir(), filename)
+			model := &FileDatabaseModel{Users: map[string]FileDatabaseUserDetailsModel{
+				"known":  {Password: digest.Encode(), DisplayName: "Known User", Email: "known@example.com", CreatedAt: &knownCreatedAt},
+				"legacy": {Password: digest.Encode(), DisplayName: "Legacy User", Email: "legacy@example.com"},
+			}}
+			require.NoError(t, model.Write(path))
+
+			config := DefaultFileAuthenticationBackendConfiguration
+			config.Path = path
+			provider := NewFileUserProvider(&config)
+			require.NoError(t, provider.StartupCheck())
+			provider.hash = hash
+
+			beforeCreate := time.Now().UTC()
+			require.NoError(t, provider.CreateUser(UserDetailsCreate{
+				Username: "alice", Password: "original-password", DisplayName: "Alice", Email: "alice@example.com",
+			}))
+			afterCreate := time.Now().UTC()
+			created, err := provider.AdminGetUser("alice")
+			require.NoError(t, err)
+			require.NotNil(t, created.CreatedAt)
+			assert.Equal(t, time.UTC, created.CreatedAt.Location())
+			assert.False(t, created.CreatedAt.Before(beforeCreate))
+			assert.False(t, created.CreatedAt.After(afterCreate))
+
+			expected := map[string]*time.Time{"known": &knownCreatedAt, "legacy": nil, "alice": created.CreatedAt}
+
+			assertPersisted := func(t *testing.T) {
+				t.Helper()
+
+				require.NoError(t, provider.database.Load())
+				result, err := provider.AdminListUsers(UserProviderAdminListFilter{})
+				require.NoError(t, err)
+				require.Len(t, result.Users, len(expected))
+
+				for _, listed := range result.Users {
+					assert.Equal(t, expected[listed.Username], listed.CreatedAt)
+					details, err := provider.AdminGetUser(listed.Username)
+					require.NoError(t, err)
+					assert.Equal(t, expected[listed.Username], details.CreatedAt)
+
+					for _, user := range []UserProviderAdminUserDetails{listed, details} {
+						body, err := json.Marshal(user)
+						require.NoError(t, err)
+						fields := map[string]json.RawMessage{}
+						require.NoError(t, json.Unmarshal(body, &fields))
+
+						if expected[user.Username] == nil {
+							assert.NotContains(t, fields, "created_at")
+						} else {
+							require.Contains(t, fields, "created_at")
+							var timestamp string
+							require.NoError(t, json.Unmarshal(fields["created_at"], &timestamp))
+							parsed, err := time.Parse(time.RFC3339Nano, timestamp)
+							require.NoError(t, err)
+							assert.True(t, expected[user.Username].Equal(parsed))
+						}
+					}
+				}
+			}
+
+			assertPersisted(t)
+
+			for _, username := range []string{"known", "legacy", "alice"} {
+				t.Run(username, func(t *testing.T) {
+					displayName := "Updated " + username
+					email := username + ".updated@example.com"
+					groups := []string{"users", "auditors"}
+					disabled := true
+					updated, err := provider.AdminUpdateUser(username, UserProviderAdminUserUpdate{
+						DisplayName: &displayName, Email: &email, Groups: &groups, Disabled: &disabled,
+					})
+					require.NoError(t, err)
+					assert.Equal(t, expected[username], updated.CreatedAt)
+					assertPersisted(t)
+
+					require.NoError(t, provider.AdminResetUserPassword(username, "reset-password"))
+					assertPersisted(t)
+
+					disabled = false
+					updated, err = provider.AdminUpdateUser(username, UserProviderAdminUserUpdate{Disabled: &disabled})
+					require.NoError(t, err)
+					assert.Equal(t, expected[username], updated.CreatedAt)
+					assertPersisted(t)
+
+					require.NoError(t, provider.UpdatePassword(username, "updated-password"))
+					assertPersisted(t)
+					require.NoError(t, provider.ChangePassword(username, "updated-password", "changed-password"))
+					assertPersisted(t)
+				})
+			}
+
+			require.NoError(t, provider.AdminDeleteUser("known"))
+			delete(expected, "known")
+			assertPersisted(t)
+			_, err = provider.AdminGetUser("known")
+			require.ErrorIs(t, err, ErrUserNotFound)
+
+			beforeCreate = time.Now().UTC()
+			require.NoError(t, provider.CreateUser(UserDetailsCreate{
+				Username: "known", Password: "recreated-password", DisplayName: "Recreated User", Email: "known@example.com",
+			}))
+			afterCreate = time.Now().UTC()
+			recreated, err := provider.AdminGetUser("known")
+			require.NoError(t, err)
+			require.NotNil(t, recreated.CreatedAt)
+			assert.False(t, recreated.CreatedAt.Equal(knownCreatedAt))
+			assert.Equal(t, time.UTC, recreated.CreatedAt.Location())
+			assert.False(t, recreated.CreatedAt.Before(beforeCreate))
+			assert.False(t, recreated.CreatedAt.After(afterCreate))
+			expected["known"] = recreated.CreatedAt
+			assertPersisted(t)
+		})
+	}
+}
+
 func TestFileUserProviderAdminOperations(t *testing.T) {
 	WithDatabase(t, UserDatabaseContent, func(path string) {
 		config := DefaultFileAuthenticationBackendConfiguration

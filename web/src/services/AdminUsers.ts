@@ -23,6 +23,7 @@ export interface AdminUser {
     email: string;
     groups: string[];
     disabled: boolean;
+    created_at?: null | string;
 }
 
 export interface AdminCreateUserNotificationStatus {

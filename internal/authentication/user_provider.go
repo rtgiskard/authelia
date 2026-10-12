@@ -5,6 +5,8 @@
 package authentication
 
 import (
+	"time"
+
 	"github.com/authelia/authelia/v4/internal/model"
 )
 
@@ -73,11 +75,12 @@ type UserProviderAdminListResult struct {
 }
 
 type UserProviderAdminUserDetails struct {
-	Username    string   `json:"username"`
-	DisplayName string   `json:"display_name"`
-	Email       string   `json:"email"`
-	Groups      []string `json:"groups"`
-	Disabled    bool     `json:"disabled"`
+	Username    string     `json:"username"`
+	DisplayName string     `json:"display_name"`
+	Email       string     `json:"email"`
+	Groups      []string   `json:"groups"`
+	Disabled    bool       `json:"disabled"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
 }
 
 type UserProviderAdminUserUpdate struct {

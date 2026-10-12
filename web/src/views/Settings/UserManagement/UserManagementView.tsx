@@ -43,6 +43,7 @@ import { Spinner } from "@components/UI/Spinner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@components/UI/Tooltip";
 import { useNotifications } from "@contexts/NotificationsContext";
 import { useUserInfoGET } from "@hooks/UserInfo";
+import { FormatDateHumanReadable } from "@i18n/formats";
 import { type PasswordPolicyConfiguration, PasswordPolicyMode } from "@models/PasswordPolicy";
 import {
     type AdminCreateUserNotificationStatus,
@@ -1706,7 +1707,7 @@ interface UserCollectionProps {
     onEdit: (username: string) => void;
     onResetPassword: (username: string) => void;
     onToggle: (user: AdminUser) => void;
-    translate: (key: string, values?: Record<string, string>) => string;
+    translate: (key: string, values?: Record<string, unknown>) => string;
     users: AdminUser[];
 }
 
@@ -1736,6 +1737,7 @@ const UserTable = ({
                     <th className="px-4 py-3 font-semibold">{translate("Display Name")}</th>
                     <th className="px-4 py-3 font-semibold">{translate("Email")}</th>
                     <th className="px-4 py-3 font-semibold">{translate("Groups")}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">{translate("Added Time")}</th>
                     <th
                         aria-sort={statusSortDirection === "asc" ? "ascending" : "descending"}
                         className="px-4 py-3 font-semibold"
@@ -1755,6 +1757,18 @@ const UserTable = ({
                         <td className="px-4 py-3">{user.email || translate("Not Set")}</td>
                         <td className="px-4 py-3">
                             <GroupsList groups={user.groups} translate={translate} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                            {user.created_at ? (
+                                <time dateTime={user.created_at}>
+                                    {translate("{{when, datetime}}", {
+                                        formatParams: { when: FormatDateHumanReadable },
+                                        when: new Date(user.created_at),
+                                    })}
+                                </time>
+                            ) : (
+                                translate("Unknown")
+                            )}
                         </td>
                         <td className="px-4 py-3">
                             <StatusChip disabled={user.disabled} translate={translate} />
@@ -1806,6 +1820,19 @@ const UserCards = ({
                     </p>
                     <div className="mt-3">
                         <GroupsList groups={user.groups} translate={translate} />
+                    </div>
+                    <div className="mt-3 text-sm">
+                        <p className="text-muted-foreground">{translate("Added Time")}</p>
+                        {user.created_at ? (
+                            <time dateTime={user.created_at}>
+                                {translate("{{when, datetime}}", {
+                                    formatParams: { when: FormatDateHumanReadable },
+                                    when: new Date(user.created_at),
+                                })}
+                            </time>
+                        ) : (
+                            translate("Unknown")
+                        )}
                     </div>
                 </CardContent>
                 <CardFooter className="justify-end border-t px-5 py-3">

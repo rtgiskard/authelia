@@ -921,6 +921,89 @@ paths:
           description: Administration is disabled
       security:
         - authelia_auth: []
+  /admin/api/v1/users:
+    get:
+      operationId: getAdminUsers
+      tags:
+        - User Information
+      summary: Administrator User List
+      description: >
+        Lists File-backed users. Requires administration to be enabled, administrator authorization,
+        and completed administrator session verification. New users have a backend-generated UTC created_at;
+        existing users without a recorded creation time omit this field and are not backfilled.
+      parameters:
+        - name: search
+          in: query
+          description: Case-insensitive substring match on username, display name, or email.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ['OK']
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/authentication.AdminUser'
+                      total:
+                        type: integer
+                        description: Number of users matching the search.
+        "403":
+          description: Forbidden
+        "404":
+          description: Administration is disabled
+        "501":
+          description: Authentication backend does not support user management
+      security:
+        - authelia_auth: []
+  /admin/api/v1/users/{username}:
+    get:
+      operationId: getAdminUser
+      tags:
+        - User Information
+      summary: Administrator User Details
+      description: >
+        Returns File-backed user details with the optional creation timestamp. Requires administration
+        to be enabled, administrator authorization, and completed administrator session verification.
+        Profile changes, enablement, disablement, and password changes preserve created_at. The timestamp
+        is not a writable create or update field. Deleting and recreating a username records a new timestamp.
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ['OK']
+                  data:
+                    $ref: '#/components/schemas/authentication.AdminUser'
+        "403":
+          description: Forbidden
+        "404":
+          description: User not found or administration is disabled
+        "501":
+          description: Authentication backend does not support user management
+      security:
+        - authelia_auth: []
   /api/user/session/elevation:
     get:
       operationId: getUserSessionElevation
@@ -3056,6 +3139,36 @@ components:
           type: string
           examples:
             - 'Operation Failed.'
+    authentication.AdminUser:
+      type: object
+      required:
+        - username
+        - display_name
+        - email
+        - groups
+        - disabled
+      properties:
+        username:
+          type: string
+        display_name:
+          type: string
+        email:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+        disabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: >
+            Backend-recorded UTC creation time in RFC 3339 format. Omitted for users without a recorded
+            time, including legacy users. Returned by list, read, and update operations when known.
+          examples:
+            - '2026-10-12T09:01:32.320730572Z'
     handlers.UserInfo:
       type: object
       properties:

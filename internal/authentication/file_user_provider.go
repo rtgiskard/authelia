@@ -107,6 +107,8 @@ func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
 		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
 	}
 
+	createdAt := time.Now().UTC()
+
 	user := FileUserDatabaseUserDetails{
 		Username:    details.Username,
 		Password:    schema.NewPasswordDigest(digest),
@@ -114,6 +116,7 @@ func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
 		DisplayName: details.DisplayName,
 		Email:       details.Email,
 		Groups:      details.Groups,
+		CreatedAt:   &createdAt,
 	}
 
 	if err = p.database.CreateUserDetails(details.Username, &user); err != nil {
@@ -403,6 +406,7 @@ func (m FileUserDatabaseUserDetails) ToAdminUserDetails() (details UserProviderA
 		Email:       m.Email,
 		Groups:      groups,
 		Disabled:    m.Disabled,
+		CreatedAt:   m.CreatedAt,
 	}
 }
 

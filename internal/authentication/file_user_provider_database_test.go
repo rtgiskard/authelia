@@ -1567,6 +1567,8 @@ func TestDatabaseModelExtended(t *testing.T) {
 func TestDatabaseModel_WriteFormats(t *testing.T) {
 	const validHash = "$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKn50cFzzvE9RXV88h1wJn5KGiHrD0YKtZaR/nCb2CJPOsKaPK0hjf.9yHxzQGZziziccp6Yng"
 
+	createdAt := time.Date(2026, time.January, 2, 3, 4, 5, 123456789, time.UTC)
+
 	testCases := []struct {
 		name     string
 		filename string
@@ -1590,6 +1592,7 @@ func TestDatabaseModel_WriteFormats(t *testing.T) {
 						DisplayName: "John",
 						Email:       "john@example.com",
 						Groups:      []string{"admins", "dev"},
+						CreatedAt:   &createdAt,
 						Address:     &FileUserDatabaseUserDetailsAddressModel{StreetAddress: "1 Road", Country: "AU"},
 						Extra:       map[string]any{"example": "value"},
 					},
@@ -1613,6 +1616,18 @@ func TestDatabaseModel_WriteFormats(t *testing.T) {
 			assert.Equal(t, model.Users["john"].DisplayName, actual.Users["john"].DisplayName)
 			assert.Equal(t, model.Users["john"].Email, actual.Users["john"].Email)
 			assert.Equal(t, model.Users["john"].Groups, actual.Users["john"].Groups)
+			assert.Equal(t, &createdAt, actual.Users["john"].CreatedAt)
+
+			database := NewFileUserDatabase(path, false, false, map[string]expression.ExtraAttribute{
+				"example": schema.AuthenticationBackendExtraAttribute{ValueType: "string"},
+			})
+			require.NoError(t, database.Load())
+			user, err := database.GetUserDetails("john")
+			require.NoError(t, err)
+			assert.Equal(t, &createdAt, user.CreatedAt)
+			require.NoError(t, database.Save())
+			require.NoError(t, actual.Read(path))
+			assert.Equal(t, &createdAt, actual.Users["john"].CreatedAt)
 			assert.Equal(t, model.Users["john"].Extra, actual.Users["john"].Extra)
 
 			require.NotNil(t, actual.Users["john"].Address)

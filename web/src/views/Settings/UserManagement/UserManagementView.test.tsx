@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createInstance } from "i18next";
 
 import { SecondFactorMethod } from "@models/Methods";
 import { PasswordPolicyMode } from "@models/PasswordPolicy";
@@ -16,11 +17,15 @@ import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfigur
 import { type UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
 import UserManagementView from "@views/Settings/UserManagement/UserManagementView";
 
+import enSettings from "../../../../../internal/server/locales/en/settings.json";
+import zhCNSettings from "../../../../../internal/server/locales/zh-CN/settings.json";
+
 const mockCreateErrorNotification = vi.fn();
 const mockCreateInfoNotification = vi.fn();
 const mockCreateSuccessNotification = vi.fn();
 const mockCreateWarnNotification = vi.fn();
 const mockUseUserInfoGET = vi.fn();
+const mockTranslate = vi.fn<(key: string, values?: Record<string, unknown>) => string>((key) => key);
 
 type SecondFactorDialogMockProps = {
     handleClosed: (approved: boolean, changed: boolean) => void;
@@ -62,7 +67,7 @@ const IdentityVerificationDialogMock = ({ handleClosed, opening }: IdentityVerif
     ) : null;
 
 vi.mock("react-i18next", () => ({
-    useTranslation: () => ({ t: (key: string) => key }),
+    useTranslation: () => ({ t: mockTranslate }),
 }));
 
 vi.mock("@contexts/NotificationsContext", () => ({
@@ -104,7 +109,7 @@ vi.mock("@views/Settings/Common/IdentityVerificationDialog", () => ({
     default: (props: IdentityVerificationDialogMockProps) => <IdentityVerificationDialogMock {...props} />,
 }));
 
-beforeAll(() => {
+beforeEach(() => {
     Object.defineProperty(globalThis, "matchMedia", {
         configurable: true,
         value: vi.fn().mockImplementation((query: string) => ({
@@ -122,6 +127,8 @@ beforeAll(() => {
 
 beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => {});
+    mockTranslate.mockReset();
+    mockTranslate.mockImplementation((key) => key);
     mockCreateErrorNotification.mockReset();
     mockCreateInfoNotification.mockReset();
     mockCreateSuccessNotification.mockReset();
@@ -250,6 +257,79 @@ it("renders users returned by the list endpoint", async () => {
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 });
 
+it.each([
+    { isMobile: false, label: "Added Time", language: "en", unknown: "Unknown" },
+    { isMobile: true, label: "Added Time", language: "en", unknown: "Unknown" },
+    { isMobile: false, label: "添加时间", language: "zh-CN", unknown: "未知" },
+    { isMobile: true, label: "添加时间", language: "zh-CN", unknown: "未知" },
+])(
+    "shows localized added time and legacy unknown dates (mobile: $isMobile, locale: $language)",
+    async ({ isMobile, label, language, unknown }) => {
+        const i18n = createInstance();
+        await i18n.init({
+            defaultNS: "settings",
+            fallbackLng: "en",
+            lng: language,
+            resources: {
+                en: { settings: enSettings },
+                "zh-CN": { settings: zhCNSettings },
+            },
+        });
+        mockTranslate.mockImplementation((key, values) => i18n.t(key, values));
+
+        const media = globalThis.matchMedia("(max-width: 899px)");
+        vi.spyOn(globalThis, "matchMedia").mockReturnValue({ ...media, matches: isMobile });
+
+        const createdAt = "2026-10-12T06:45:00Z";
+        vi.mocked(listAdminUsers).mockResolvedValue([
+            {
+                created_at: createdAt,
+                disabled: false,
+                display_name: "Alice Admin",
+                email: "alice@example.com",
+                groups: ["admins"],
+                username: "alice",
+            },
+            {
+                disabled: false,
+                display_name: "Legacy User",
+                email: "legacy@example.com",
+                groups: [],
+                username: "legacy",
+            },
+            {
+                created_at: null,
+                disabled: false,
+                display_name: "Unknown User",
+                email: "unknown@example.com",
+                groups: [],
+                username: "unknown",
+            },
+        ]);
+
+        render(<UserManagementView />);
+
+        await screen.findByText("alice", {}, { timeout: 3000 });
+
+        const expectedDate = new Intl.DateTimeFormat(language, {
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            month: "long",
+            year: "numeric",
+        }).format(new Date(createdAt));
+        expect(screen.getByText(expectedDate)).toHaveAttribute("datetime", createdAt);
+        expect(screen.getAllByText(unknown)).toHaveLength(2);
+        expect(screen.getAllByText(label)).toHaveLength(isMobile ? 3 : 1);
+
+        if (isMobile) {
+            expect(screen.queryByRole("table")).not.toBeInTheDocument();
+        } else {
+            expect(screen.getByRole("columnheader", { name: label })).toBeInTheDocument();
+        }
+    },
+);
+
 it("shows an empty state when search has no matching users", async () => {
     vi.mocked(listAdminUsers)
         .mockResolvedValueOnce([
@@ -293,6 +373,7 @@ it("creates a user with notify enabled when email is provided", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Create User" }));
 
     const dialog = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    expect(within(dialog).queryByLabelText("Added Time")).not.toBeInTheDocument();
 
     fireEvent.change(within(dialog).getByLabelText("Username *"), {
         target: { value: "new-user" },
@@ -450,6 +531,39 @@ it("requires an email address when editing a user", async () => {
     expect(mockCreateErrorNotification).toHaveBeenCalledWith("Email is required");
     expect(updateAdminUser).not.toHaveBeenCalled();
     expect(emailField).toHaveAttribute("aria-invalid", "true");
+});
+
+it("keeps the creation timestamp read-only and out of edit payloads", async () => {
+    const user = {
+        created_at: "2026-10-12T06:45:00Z",
+        disabled: false,
+        display_name: "Alice Admin",
+        email: "alice@example.com",
+        groups: ["admins"],
+        username: "alice",
+    };
+    vi.mocked(listAdminUsers).mockResolvedValue([user]);
+    vi.mocked(getAdminUser).mockResolvedValue(user);
+
+    render(<UserManagementView />);
+
+    await screen.findByText("alice", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Edit User alice" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Edit User" }, { timeout: 3000 });
+    const displayName = await within(dialog).findByDisplayValue("Alice Admin");
+    expect(within(dialog).queryByLabelText("Added Time")).not.toBeInTheDocument();
+    fireEvent.change(displayName, { target: { value: "Alice Updated" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    await waitFor(() => {
+        expect(updateAdminUser).toHaveBeenCalledWith("alice", {
+            disabled: false,
+            display_name: "Alice Updated",
+            email: "alice@example.com",
+            groups: ["admins"],
+        });
+    });
 });
 
 it("shows duplicate email feedback while editing a user", async () => {
@@ -726,6 +840,7 @@ it("hides delete actions and uses clearer sign-in labels when delete is unavaila
 it("toggles a user with a disabled-only update payload", async () => {
     vi.mocked(listAdminUsers).mockResolvedValue([
         {
+            created_at: "2026-10-12T06:45:00Z",
             disabled: false,
             display_name: "Alice Admin",
             email: "",

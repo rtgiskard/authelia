@@ -2,6 +2,7 @@
 	"{{algorithm}}, {{digits}} digits, {{seconds}} seconds": "{{algorithm}}，{{digits}} 位数字，{{seconds}} 秒",
 	"A WebAuthn Credential with that Description already exists": "带有该描述的 WebAuthn 凭据已经存在",
 	"Add": "添加",
+	"Added Time": "添加时间",
 	"Added when": "已添加 {{when, datetime}}",
 	"Added": "已添加",
 	"added": "已添加",

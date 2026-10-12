@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/asaskevich/govalidator/v12"
 	"github.com/go-crypt/crypt"
@@ -470,6 +471,7 @@ type FileUserDatabaseUserDetails struct {
 	Email          string                 `json:"email" jsonschema:"title=Email" jsonschema_description:"The email for the user."`
 	Groups         []string               `json:"groups" jsonschema:"title=Groups" jsonschema_description:"The groups list for the user."`
 	Disabled       bool                   `json:"disabled" jsonschema:"default=false,title=Disabled" jsonschema_description:"The disabled status for the user."`
+	CreatedAt      *time.Time             `json:"created_at,omitempty" jsonschema:"title=Created At" jsonschema_description:"The time the user was created, if known."`
 
 	Address *FileUserDatabaseUserDetailsAddressModel `json:"address,omitempty" jsonschema:"title=Address" jsonschema_description:"The address for the user."`
 
@@ -551,6 +553,7 @@ func (m FileUserDatabaseUserDetails) ToUserDetailsModel() (model FileDatabaseUse
 		Email:          m.Email,
 		Groups:         m.Groups,
 		Disabled:       m.Disabled,
+		CreatedAt:      m.CreatedAt,
 		Address:        m.Address,
 		Extra:          m.Extra,
 	}
@@ -728,24 +731,25 @@ func (m *FileDatabaseModel) Write(fileName string) (err error) {
 
 // FileDatabaseUserDetailsModel is the model of user details in the file database.
 type FileDatabaseUserDetailsModel struct {
-	Password       string   `yaml:"password" toml:"password" json:"password" valid:"required"`
-	DisplayName    string   `yaml:"displayname" toml:"displayname" json:"displayname" valid:"required"`
-	Email          string   `yaml:"email,omitempty" toml:"email,omitempty" json:"email,omitempty"`
-	Groups         []string `yaml:"groups,omitempty" toml:"groups,omitempty" json:"groups,omitempty"`
-	GivenName      string   `yaml:"given_name,omitempty" toml:"given_name,omitempty" json:"given_name,omitempty"`
-	MiddleName     string   `yaml:"middle_name,omitempty" toml:"middle_name,omitempty" json:"middle_name,omitempty"`
-	FamilyName     string   `yaml:"family_name,omitempty" toml:"family_name,omitempty" json:"family_name,omitempty"`
-	Nickname       string   `yaml:"nickname,omitempty" toml:"nickname,omitempty" json:"nickname,omitempty"`
-	Gender         string   `yaml:"gender,omitempty" toml:"gender,omitempty" json:"gender,omitempty"`
-	Birthdate      string   `yaml:"birthdate,omitempty" toml:"birthdate,omitempty" json:"birthdate,omitempty"`
-	Website        string   `yaml:"website,omitempty" toml:"website,omitempty" json:"website,omitempty"`
-	Profile        string   `yaml:"profile,omitempty" toml:"profile,omitempty" json:"profile,omitempty"`
-	Picture        string   `yaml:"picture,omitempty" toml:"picture,omitempty" json:"picture,omitempty"`
-	ZoneInfo       string   `yaml:"zoneinfo,omitempty" toml:"zoneinfo,omitempty" json:"zoneinfo,omitempty"`
-	Locale         string   `yaml:"locale,omitempty" toml:"locale,omitempty" json:"locale,omitempty"`
-	PhoneNumber    string   `yaml:"phone_number,omitempty" toml:"phone_number,omitempty" json:"phone_number,omitempty"`
-	PhoneExtension string   `yaml:"phone_extension,omitempty" toml:"phone_extension,omitempty" json:"phone_extension,omitempty"`
-	Disabled       bool     `yaml:"disabled,omitempty" toml:"disabled,omitempty" json:"disabled,omitempty"`
+	Password       string     `yaml:"password" toml:"password" json:"password" valid:"required"`
+	DisplayName    string     `yaml:"displayname" toml:"displayname" json:"displayname" valid:"required"`
+	Email          string     `yaml:"email,omitempty" toml:"email,omitempty" json:"email,omitempty"`
+	Groups         []string   `yaml:"groups,omitempty" toml:"groups,omitempty" json:"groups,omitempty"`
+	GivenName      string     `yaml:"given_name,omitempty" toml:"given_name,omitempty" json:"given_name,omitempty"`
+	MiddleName     string     `yaml:"middle_name,omitempty" toml:"middle_name,omitempty" json:"middle_name,omitempty"`
+	FamilyName     string     `yaml:"family_name,omitempty" toml:"family_name,omitempty" json:"family_name,omitempty"`
+	Nickname       string     `yaml:"nickname,omitempty" toml:"nickname,omitempty" json:"nickname,omitempty"`
+	Gender         string     `yaml:"gender,omitempty" toml:"gender,omitempty" json:"gender,omitempty"`
+	Birthdate      string     `yaml:"birthdate,omitempty" toml:"birthdate,omitempty" json:"birthdate,omitempty"`
+	Website        string     `yaml:"website,omitempty" toml:"website,omitempty" json:"website,omitempty"`
+	Profile        string     `yaml:"profile,omitempty" toml:"profile,omitempty" json:"profile,omitempty"`
+	Picture        string     `yaml:"picture,omitempty" toml:"picture,omitempty" json:"picture,omitempty"`
+	ZoneInfo       string     `yaml:"zoneinfo,omitempty" toml:"zoneinfo,omitempty" json:"zoneinfo,omitempty"`
+	Locale         string     `yaml:"locale,omitempty" toml:"locale,omitempty" json:"locale,omitempty"`
+	PhoneNumber    string     `yaml:"phone_number,omitempty" toml:"phone_number,omitempty" json:"phone_number,omitempty"`
+	PhoneExtension string     `yaml:"phone_extension,omitempty" toml:"phone_extension,omitempty" json:"phone_extension,omitempty"`
+	Disabled       bool       `yaml:"disabled,omitempty" toml:"disabled,omitempty" json:"disabled,omitempty"`
+	CreatedAt      *time.Time `yaml:"created_at,omitempty" toml:"created_at,omitempty" json:"created_at,omitempty"`
 
 	Address *FileUserDatabaseUserDetailsAddressModel `yaml:"address,omitempty" toml:"address,omitempty" json:"address,omitempty"`
 
@@ -828,6 +832,7 @@ func (m FileDatabaseUserDetailsModel) ToDatabaseUserDetailsModel(username string
 		Username:       username,
 		Password:       schema.NewPasswordDigest(d),
 		Disabled:       m.Disabled,
+		CreatedAt:      m.CreatedAt,
 		DisplayName:    m.DisplayName,
 		Email:          m.Email,
 		GivenName:      m.GivenName,

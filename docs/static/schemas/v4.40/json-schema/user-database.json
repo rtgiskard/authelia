@@ -123,6 +123,12 @@
           "description": "The disabled status for the user.",
           "default": false
         },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Created At",
+          "description": "The time the user was created, if known."
+        },
         "address": {
           "$ref": "#/$defs/FileUserDatabaseUserDetailsAddressModel",
           "title": "Address",
