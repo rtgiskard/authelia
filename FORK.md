@@ -49,6 +49,13 @@ its administrator authorization and elevated-session requirements, user creation
 disablement, password reset, password-policy validation, and notification feedback. The File backend keeps atomic
 persistence, unique identities, and upstream user-database format and schema metadata support.
 
+Admin user payloads always encode an ungrouped user's `groups` as an empty JSON array, including list, read, and update
+responses. File databases may omit groups without breaking the management portal.
+
+Identity verification retains upstream's cancellation guard: a verification response received after cancellation must
+not complete the parent action. Failed verification re-enables the input and controls while preserving fork code
+generation guards and rate-limit feedback.
+
 Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
 normalization, and elevation rate-limit feedback remain supported.
 

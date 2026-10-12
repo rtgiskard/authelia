@@ -392,11 +392,16 @@ func (p *FileUserProvider) setTimeoutReload(now time.Time) {
 }
 
 func (m FileUserDatabaseUserDetails) ToAdminUserDetails() (details UserProviderAdminUserDetails) {
+	groups := m.Groups
+	if groups == nil {
+		groups = []string{}
+	}
+
 	return UserProviderAdminUserDetails{
 		Username:    m.Username,
 		DisplayName: m.DisplayName,
 		Email:       m.Email,
-		Groups:      m.Groups,
+		Groups:      groups,
 		Disabled:    m.Disabled,
 	}
 }

@@ -5,6 +5,7 @@
 package authentication
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1094,6 +1095,35 @@ func TestFileUserProviderAdminOperations(t *testing.T) {
 		assert.NoError(t, provider.AdminDeleteUser("john"))
 		_, err = provider.AdminGetUser("john")
 		assert.ErrorIs(t, err, ErrUserNotFound)
+	})
+}
+
+func TestFileUserProviderAdminUngroupedUsers(t *testing.T) {
+	WithDatabase(t, UserDatabaseContent, func(path string) {
+		config := DefaultFileAuthenticationBackendConfiguration
+		config.Path = path
+		provider := NewFileUserProvider(&config)
+		require.NoError(t, provider.StartupCheck())
+
+		for _, username := range []string{"harry", "james"} {
+			t.Run(username, func(t *testing.T) {
+				result, err := provider.AdminListUsers(UserProviderAdminListFilter{Search: username})
+				require.NoError(t, err)
+				require.Len(t, result.Users, 1)
+
+				details, err := provider.AdminGetUser(username)
+				require.NoError(t, err)
+				groups := []string{}
+				updated, err := provider.AdminUpdateUser(username, UserProviderAdminUserUpdate{Groups: &groups})
+				require.NoError(t, err)
+
+				for _, user := range []UserProviderAdminUserDetails{result.Users[0], details, updated} {
+					body, err := json.Marshal(user)
+					require.NoError(t, err)
+					assert.Contains(t, string(body), `"groups":[]`)
+				}
+			})
+		}
 	})
 }
 

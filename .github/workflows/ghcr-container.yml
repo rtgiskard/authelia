@@ -18,7 +18,7 @@ permissions:
 env:
   IMAGE_NAME: ghcr.io/rtgiskard/authelia
   NODE_VERSION: "26"
-  PNPM_VERSION: "12.6.0"
+  PNPM_VERSION: "12.9.1"
   SWAGGER_UI_VERSION: "5.33.0"
 
 jobs:

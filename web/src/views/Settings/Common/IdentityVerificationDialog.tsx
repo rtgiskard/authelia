@@ -51,6 +51,7 @@ const IdentityVerificationDialog = (props: Props) => {
     const generationInFlightRef = useRef(false);
     const openingConsumedRef = useRef(false);
     const timeoutSuccessRef = useRef<null | ReturnType<typeof setTimeout>>(null);
+    const attemptRef = useRef(0);
 
     useEffect(() => {
         return () => {
@@ -85,6 +86,7 @@ const IdentityVerificationDialog = (props: Props) => {
     }, [codeDelete]);
 
     const handleCancelled = useCallback(() => {
+        attemptRef.current++;
         setClosing(true);
 
         handleDelete().catch(console.error);
@@ -118,17 +120,18 @@ const IdentityVerificationDialog = (props: Props) => {
         if (codeInput === "") return;
 
         setLoading(true);
+        const attempt = ++attemptRef.current;
+        const success = await verifyUserSessionElevation(codeInput).catch((err) => {
+            console.error(err);
 
-        try {
-            const success = await verifyUserSessionElevation(codeInput);
+            return false;
+        });
 
-            if (success) {
-                handleSuccess();
-            } else {
-                handleFailure();
-            }
-        } catch (error) {
-            console.error(error);
+        if (attempt !== attemptRef.current) return;
+
+        if (success) {
+            handleSuccess();
+        } else {
             handleFailure();
         }
     }, [codeInput, handleFailure, handleSuccess]);
