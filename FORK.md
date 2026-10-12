@@ -56,6 +56,11 @@ Identity verification retains upstream's cancellation guard: a verification resp
 not complete the parent action. Failed verification re-enables the input and controls while preserving fork code
 generation guards and rate-limit feedback.
 
+The OIDC consent portal shows the client description without its technical client ID, using the localized consent
+request label when the description is empty. Token audiences matching the requesting client ID are omitted; other
+services remain visible. Permission and audience sections retain their headings and entries without redundant
+explanatory subtitles, with Simplified Chinese headings provided by the portal locale.
+
 User management accepts either completed second-factor authentication or email session elevation. When second-factor
 verification is optional and a method is configured, the administrator chooses the method explicitly; failed or
 cancelled second-factor authentication never falls back to email. Without a configured method, only email verification

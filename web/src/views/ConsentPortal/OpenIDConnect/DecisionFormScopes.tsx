@@ -20,11 +20,7 @@ function DecisionFormScopes({ scopes }: Props) {
     }
 
     return (
-        <DecisionFormSection
-            id={"openid-consent-scopes"}
-            title={translate("Requested Permissions")}
-            description={translate("The actions the application will be allowed to perform on your behalf")}
-        >
+        <DecisionFormSection id={"openid-consent-scopes"} title={translate("Requested Permissions")}>
             {scopes.map((scope: string) => {
                 const label = formatScope(translate(`scopes.${scope}`, { nsSeparator: false }), scope);
 

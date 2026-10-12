@@ -27,6 +27,7 @@ function DecisionFormRequest({ claims, collapsible, onChangeClaims, response }: 
     const { t: translate } = useTranslation(["consent"]);
 
     const [open, setOpen] = useState(false);
+    const audience = response.audience?.filter((value) => value !== response.client_id);
 
     const sections = (
         <CardContent className="flex flex-col gap-5 px-4 py-5">
@@ -37,7 +38,7 @@ function DecisionFormRequest({ claims, collapsible, onChangeClaims, response }: 
                 essential_claims={response.essential_claims}
                 onChangeChecked={onChangeClaims}
             />
-            <DecisionFormAudience audience={response.audience} />
+            <DecisionFormAudience audience={audience} />
             <DecisionFormResource resource={response.resource} />
         </CardContent>
     );
@@ -46,13 +47,13 @@ function DecisionFormRequest({ claims, collapsible, onChangeClaims, response }: 
         (response.scopes?.length ?? 0) === 0 &&
         (response.claims?.length ?? 0) === 0 &&
         (response.essential_claims?.length ?? 0) === 0 &&
-        (response.audience?.length ?? 0) === 0 &&
+        (audience?.length ?? 0) === 0 &&
         (response.resource?.length ?? 0) === 0;
 
     return (
         <Card className="gap-0 overflow-hidden py-0">
             <CardHeader className="px-4 py-4">
-                <DecisionFormClient client_id={response.client_id} client_description={response.client_description} />
+                <DecisionFormClient client_description={response.client_description} />
             </CardHeader>
             {collapsible ? (
                 empty ? null : (

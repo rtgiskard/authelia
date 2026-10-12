@@ -6,14 +6,11 @@ import { AppWindow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export interface Props {
-    client_id: string;
     client_description: string;
 }
 
-function DecisionFormClient({ client_description, client_id }: Props) {
+function DecisionFormClient({ client_description }: Props) {
     const { t: translate } = useTranslation(["consent"]);
-
-    const named = client_description !== "";
 
     return (
         <div className="flex w-full items-center gap-3 text-left">
@@ -26,17 +23,8 @@ function DecisionFormClient({ client_description, client_id }: Props) {
                     data-testid={"openid-consent-client-name"}
                     className="block truncate font-semibold"
                 >
-                    {named ? client_description : client_id}
+                    {client_description || translate("Consent Request")}
                 </span>
-                {named ? (
-                    <span
-                        id={"openid-consent-client-id"}
-                        className="block truncate font-mono text-xs text-muted-foreground"
-                        title={translate("Client ID", { client_id }) || `Client ID: ${client_id}`}
-                    >
-                        {client_id}
-                    </span>
-                ) : null}
             </span>
         </div>
     );

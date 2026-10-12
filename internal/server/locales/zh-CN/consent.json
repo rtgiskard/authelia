@@ -17,9 +17,11 @@
 	"Failed to submit the user code": "提交用户代码失败",
 	"Hint": "提示",
 	"Remember Consent": "记住我的选择",
+	"Requested Permissions": "请求的权限",
 	"Scope": "区域 {{name}}",
 	"The above application is requesting the following permissions": "此应用正在请求以下权限",
 	"This saves this consent as a pre-configured consent for future use": "以后为此应用自动授权以上权限",
+	"Token Audience": "授权服务",
 	"You may close this tab or return home by clicking the home button": "您可以通过单击主页按钮关闭此选项卡或返回主页",
 	"You must reauthenticate to be able to give consent": "您必须重新身份验证才能表示同意",
 	"claims": {

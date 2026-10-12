@@ -219,13 +219,6 @@ it("navigates to the index route when the consent response fails", async () => {
     await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith("/"));
 });
 
-it("renders the client description and client id", async () => {
-    await renderLoaded();
-
-    expect(screen.getByTestId("openid-consent-client-name")).toHaveTextContent("Test Client");
-    expect(screen.getByText("test-client")).toBeInTheDocument();
-});
-
 it("renders the requested scopes", async () => {
     await renderLoaded();
 

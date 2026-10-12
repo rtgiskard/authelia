@@ -153,3 +153,50 @@ it("reports claim changes", () => {
 
     expect(onChangeClaims).toHaveBeenCalledWith([]);
 });
+
+it.each(["Test Client", ""])("does not display the client ID with description %j", (client_description) => {
+    render(
+        <DecisionFormRequest
+            response={response({ audience: ["test-client"], client_description })}
+            claims={["name"]}
+            onChangeClaims={vi.fn()}
+        />,
+    );
+
+    expect(screen.queryByText("test-client")).not.toBeInTheDocument();
+    expect(document.getElementById("openid-consent-audience")).not.toBeInTheDocument();
+    expect(screen.getByTestId("openid-consent-client-name")).toHaveTextContent(client_description || "Consent Request");
+    expect(document.getElementById("openid-consent-scopes")).toBeInTheDocument();
+});
+
+it("preserves other token audiences while hiding the client ID", () => {
+    render(
+        <DecisionFormRequest
+            response={response({ audience: ["test-client", "https://api.example.com"] })}
+            claims={["name"]}
+            onChangeClaims={vi.fn()}
+        />,
+    );
+
+    expect(screen.queryByText("test-client")).not.toBeInTheDocument();
+    expect(screen.getByText("https://api.example.com")).toBeInTheDocument();
+});
+
+it("does not offer an empty disclosure for a client-only audience", () => {
+    render(
+        <DecisionFormRequest
+            collapsible
+            response={response({
+                audience: ["test-client"],
+                claims: null,
+                essential_claims: null,
+                resource: null,
+                scopes: [],
+            })}
+            claims={[]}
+            onChangeClaims={vi.fn()}
+        />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Show request details" })).not.toBeInTheDocument();
+});

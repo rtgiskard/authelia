@@ -19,11 +19,7 @@ function DecisionFormAudience({ audience }: Props) {
     }
 
     return (
-        <DecisionFormSection
-            id={"openid-consent-audience"}
-            title={translate("Token Audience")}
-            description={translate("The services the issued tokens will be valid for")}
-        >
+        <DecisionFormSection id={"openid-consent-audience"} title={translate("Token Audience")}>
             {audience.map((value: string) => (
                 <DecisionFormSectionItem key={value} id={`audience-${value}`} icon={<Server className="size-4" />}>
                     <span className="font-mono text-sm break-all">{value}</span>
