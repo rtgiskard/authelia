@@ -303,3 +303,25 @@ func TestNotifierMiscMissingTemplateTests(t *testing.T) {
 
 	assert.EqualError(t, validator.Errors()[0], "notifier: option 'template_path' refers to location '\x00\x01' which couldn't be opened: stat \x00\x01: invalid argument")
 }
+
+func TestNotifierDefaultLanguage(t *testing.T) {
+	for _, tc := range []struct {
+		language string
+		expected string
+		invalid  bool
+	}{
+		{"", "en", false},
+		{"en", "en", false},
+		{"zh-CN", "zh-CN", false},
+		{"zh", "zh", true},
+		{"fr", "fr", true},
+	} {
+		t.Run(tc.language, func(t *testing.T) {
+			config := schema.Notifier{DefaultLanguage: tc.language, FileSystem: &schema.NotifierFileSystem{Filename: "notifications.txt"}}
+			validator := schema.NewStructValidator()
+			ValidateNotifier(&config, validator)
+			assert.Equal(t, tc.expected, config.DefaultLanguage)
+			assert.Equal(t, tc.invalid, validator.HasErrors())
+		})
+	}
+}

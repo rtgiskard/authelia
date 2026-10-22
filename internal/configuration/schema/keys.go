@@ -292,6 +292,7 @@ var Keys = []string{
 	"log.format",
 	"log.keep_stdout",
 	"log.level",
+	"notifier.default_language",
 	"notifier.disable_startup_check",
 	"notifier.filesystem.filename",
 	"notifier.smtp.address",

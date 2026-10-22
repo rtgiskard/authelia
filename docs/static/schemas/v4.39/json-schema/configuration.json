@@ -3066,6 +3066,16 @@
     },
     "Notifier": {
       "properties": {
+        "default_language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "zh-CN"
+          ],
+          "title": "Default Language",
+          "description": "The default notification language.",
+          "default": "en"
+        },
         "disable_startup_check": {
           "type": "boolean",
           "title": "Disable Startup Check",

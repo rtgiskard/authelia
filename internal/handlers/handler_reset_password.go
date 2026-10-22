@@ -228,6 +228,7 @@ func ResetPasswordPOST(ctx *middlewares.AutheliaCtx) {
 
 	data := templates.EmailEventValues{
 		Title:       "Password changed successfully",
+		Language:    ctx.NotificationLanguage(),
 		DisplayName: userInfo.DisplayName,
 		RemoteIP:    ctx.RemoteIP().String(),
 		Details: map[string]any{

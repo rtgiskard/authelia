@@ -163,7 +163,7 @@ func (n *SMTPNotifier) Send(ctx context.Context, recipient mail.Address, subject
 	}
 
 	if err = client.Close(); err != nil {
-		return fmt.Errorf("notifier: smtp: failed to close connection: %w", err)
+		n.log.WithError(err).Warn("Notification sent, but SMTP connection cleanup failed")
 	}
 
 	return nil

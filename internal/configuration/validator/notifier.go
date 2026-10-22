@@ -14,6 +14,14 @@ import (
 
 // ValidateNotifier validates and update notifier configuration.
 func ValidateNotifier(config *schema.Notifier, validator *schema.StructValidator) {
+	switch config.DefaultLanguage {
+	case "":
+		config.DefaultLanguage = "en"
+	case "en", "zh-CN":
+	default:
+		validator.Push(fmt.Errorf("notifier: option 'default_language' must be one of 'en' or 'zh-CN' but it's configured as '%s'", config.DefaultLanguage))
+	}
+
 	if config.SMTP == nil && config.FileSystem == nil {
 		validator.Push(errors.New(errFmtNotifierNotConfigured))
 

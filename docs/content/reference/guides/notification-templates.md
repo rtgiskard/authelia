@@ -54,6 +54,10 @@ In template files, you can use the following placeholders which are automaticall
 |         Placeholder         |                    Templates                     |                                                                           Description                                                                           |
 | :-------------------------: | :----------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |       `{{ .Title }}`        |                       All                        | A predefined title for the email, matching the subject line. See [Events](../../configuration/notifications/events.md) for the value sent by each notification. |
+| `{{ .Language }}` | All | The selected built-in notification language: `en` or `zh-CN`. |
+| `{{ .ExpiresAt }}` | IdentityVerificationJWT, IdentityVerificationOTC | The expiration time as a Go `time.Time`; format with `.ExpiresAt.UTC.Format "2006-01-02 15:04:05 UTC"`. |
+| `{{ .Administrator }}` | Event, IdentityVerificationJWT | Whether an administrator initiated the notification. |
+| `{{ .NewAccount }}` | IdentityVerificationJWT | Whether the link invites a newly created account to choose its password. |
 |    `{{ .DisplayName }}`     |                       All                        |                                                              The name of the user, i.e. `John Doe`                                                              |
 |      `{{ .RemoteIP }}`      |                       All                        |                                               The remote IP address (client) that initiated the request or event.                                               |
 |       `{{ .Domain }}`       | IdentityVerificationJWT, IdentityVerificationOTC |                                                                The relevant domain for Authelia.                                                                |
@@ -92,5 +96,8 @@ The original template content can be found on
 
 Several functions are implemented with the email templates. See the
 [Templating Reference Guide](../../reference/guides/templating.md) for more information.
+
+The built-in `notificationText .Language "English source text"` function translates known notification text, preserving
+unknown strings. `notificationLanguage .Language` returns a supported HTML language value, falling back to `en`.
 
 [Versioning Policy]: ../../policies/versioning.md

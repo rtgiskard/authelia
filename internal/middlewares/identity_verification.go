@@ -37,7 +37,7 @@ func IdentityVerificationStart(args IdentityVerificationStartArgs, delayer Delay
 			return
 		}
 
-		if err = sendIdentityVerificationEmail(ctx, *identity, args, false, false); err != nil {
+		if err = sendIdentityVerificationEmail(ctx, *identity, args, ctx.NotificationLanguage(), false, false); err != nil {
 			ctx.GetLogger().WithError(err).Error("Error occurred sending the identity verification email")
 			ctx.SetJSONError(messageOperationFailed)
 			return
@@ -50,13 +50,18 @@ func IdentityVerificationStart(args IdentityVerificationStartArgs, delayer Delay
 
 // SendPasswordResetEmail sends an administrator's invitation without changing the current password.
 func SendPasswordResetEmail(ctx *AutheliaCtx, identity session.Identity, newAccount bool) error {
+	language := ctx.Configuration.Notifier.DefaultLanguage
+	if language == "" {
+		language = "en"
+	}
+
 	return sendIdentityVerificationEmail(ctx, identity, IdentityVerificationStartArgs{
 		MailTitle: "Reset your password", MailButtonContent: "Reset", MailButtonRevokeContent: "Revoke",
 		TargetEndpoint: "/reset-password/step2", RevokeEndpoint: "/revoke/reset-password", ActionClaim: "ResetPassword",
-	}, true, newAccount)
+	}, language, true, newAccount)
 }
 
-func sendIdentityVerificationEmail(ctx *AutheliaCtx, identity session.Identity, args IdentityVerificationStartArgs, administrator, newAccount bool) error {
+func sendIdentityVerificationEmail(ctx *AutheliaCtx, identity session.Identity, args IdentityVerificationStartArgs, language string, administrator, newAccount bool) error {
 	issuerURL, err := ctx.IssuerURL()
 	if err != nil {
 		return fmt.Errorf("determining issuer: %w", err)
@@ -97,7 +102,7 @@ func sendIdentityVerificationEmail(ctx *AutheliaCtx, identity session.Identity, 
 		Title: args.MailTitle, LinkURL: link(args.TargetEndpoint), LinkText: args.MailButtonContent,
 		RevocationLinkURL: link(args.RevokeEndpoint), RevocationLinkText: args.MailButtonRevokeContent,
 		DisplayName: identity.DisplayName, Domain: domain, RemoteIP: ctx.RemoteIP().String(),
-		ExpiresAt: verification.ExpiresAt, Administrator: administrator, NewAccount: newAccount,
+		Language: language, ExpiresAt: verification.ExpiresAt, Administrator: administrator, NewAccount: newAccount,
 	}
 
 	return ctx.SendNotification(identity.Address(), args.MailTitle, ctx.Providers.Templates.GetIdentityVerificationJWTEmailTemplate(), data)

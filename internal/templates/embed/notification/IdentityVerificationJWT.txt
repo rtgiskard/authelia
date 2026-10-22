@@ -1,31 +1,24 @@
-A ONE-TIME LINK HAS BEEN GENERATED TO COMPLETE A REQUESTED ACTION
+Authelia
 
-Hi {{ .DisplayName }},
 
-We would like to confirm a requested action related to the security of your account at {{ .Domain }}
+{{ .Title }}
 
-Do not share this notification or the content of this notification with anyone.
+{{ notificationText .Language "Hello" }} {{ .DisplayName }},
 
-----------------------------------------
+{{ if .NewAccount }}{{ notificationText .Language "An administrator has invited you to set a password for your new account." }}{{ else if .Administrator }}{{ notificationText .Language "An administrator has requested a password reset for your account." }}{{ else }}{{ notificationText .Language "Use this link to reset your password." }}{{ end }}
 
-If you made this request, click the validation link below.
+{{ notificationText .Language "Account" }}: {{ .Domain }}
 
-{{ .LinkURL }}
+{{ if not .ExpiresAt.IsZero }}{{ notificationText .Language "Expires at" }}: {{ .ExpiresAt.UTC.Format "2006-01-02 15:04:05 UTC" }}{{ end }}
 
-----------------------------------------
+{{ .LinkText }}: {{ .LinkURL }}
 
-If you did NOT initiate this request, your credentials may have been compromised and you should:
+{{ if .NewAccount }}{{ notificationText .Language "If you were not expecting this invitation, you can ignore this email or contact your administrator." }}{{ else if .Administrator }}{{ notificationText .Language "If you were not expecting this reset, you can ignore this email or contact your administrator. Your password has not changed." }}{{ else }}{{ notificationText .Language "If you did not request this, you can ignore this email. Your password has not changed." }}{{ end }}
 
- 1. Revoke the validation link using the provided links below
- 2. Reset your password or other login credentials
- 3. Contact an Administrator
+{{ notificationText .Language "Do not forward this email or share this link." }}
 
-To revoke the code, click the link below:
+{{ if .RevocationLinkURL }}
 
-{{ .RevocationLinkURL }}
+{{ notificationText .Language "Cancel this link" }}: {{ .RevocationLinkURL }}
 
-----------------------------------------
-
-This email was intended for {{ .DisplayName }}. This event was generated due to an action from {{ .RemoteIP }}. If you do not believe that your actions could have triggered this event or if you are concerned about your account's safety, please follow the explicit directions in this notification.
-
-Powered by Authelia https://www.authelia.com
+{{ end }}

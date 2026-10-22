@@ -27,6 +27,7 @@ Authelia sends messages to users in order to verify their identity.
 ```yaml {title="configuration.yml"}
 notifier:
   disable_startup_check: false
+  default_language: 'en'
   template_path: ''
   filesystem: {}
   smtp: {}
@@ -53,6 +54,15 @@ The two notification providers have a startup check which validates the specifie
 - For **SMTP**: Verifies connectivity to the mail server and validates any provided credentials.
 - For **Filesystem**: Verifies the target directory exists and that the specified file can be created/modified.
   The startup checks can be disabled with the `disable_startup_check` option.
+
+### default_language
+
+{{< confkey type="string" default="en" required="no" >}}
+
+The default language for built-in email subjects, text, HTML, and action labels. Supported values are `en` and `zh-CN`.
+Self-service requests use the portal's supported language preference when supplied, otherwise this default.
+Administrator-initiated messages use this site default rather than the administrator's browser language.
+Custom template content and user-entered names and descriptions are not automatically translated.
 
 ### template_path
 

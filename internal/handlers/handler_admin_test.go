@@ -275,6 +275,7 @@ func TestAdminUsersPOST_ShouldCreateUndisclosedPasswordAndSendSetupLink(t *testi
 					require.True(t, ok)
 					assert.True(t, values.NewAccount)
 					assert.True(t, values.Administrator)
+					assert.Equal(t, "zh-CN", values.Language)
 					assert.Contains(t, values.LinkURL, "/reset-password/step2?")
 					serialized, err := json.Marshal(data)
 					require.NoError(t, err)
@@ -301,6 +302,7 @@ func TestAdminUsersPOST_ShouldCreateUndisclosedPasswordAndSendSetupLink(t *testi
 func TestAdminUsersPOST_ShouldSendOptInAdministratorNotificationWithoutPassword(t *testing.T) {
 	mock := mocks.NewMockAutheliaCtx(t)
 	defer mock.Close()
+	mock.Ctx.Configuration.Notifier.DefaultLanguage = "zh-CN"
 	mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{})
 	notify := true
 	body, err := json.Marshal(adminCreateUserRequestBody{Username: "john", DisplayName: "John Doe", Email: "john@example.com", Password: testPasswordNew, Notify: &notify})
@@ -310,6 +312,7 @@ func TestAdminUsersPOST_ShouldSendOptInAdministratorNotificationWithoutPassword(
 	mock.NotifierMock.EXPECT().Send(mock.Ctx, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, _ mail.Address, _ string, _ *templates.EmailTemplate, data any) error {
 		values, ok := data.(templates.EmailEventValues)
 		require.True(t, ok)
+		assert.Equal(t, "zh-CN", values.Language)
 		assert.True(t, values.Administrator)
 		assert.NotContains(t, values.Details, "Password")
 		return nil
@@ -690,6 +693,7 @@ func TestAdminUserPasswordPUT_ShouldSendResetLinkWithoutChangingPassword(t *test
 				require.True(t, ok)
 				assert.False(t, values.NewAccount)
 				assert.True(t, values.Administrator)
+				assert.Equal(t, "zh-CN", values.Language)
 				assert.Contains(t, values.LinkURL, "/reset-password/step2?")
 				return deliveryError
 			})
@@ -756,6 +760,7 @@ func TestAdminUserPasswordPUT_ShouldSendOneSafetyNotificationAfterManualReset(t 
 		t.Run(fmt.Sprint(deliveryError), func(t *testing.T) {
 			mock := mocks.NewMockAutheliaCtx(t)
 			defer mock.Close()
+			mock.Ctx.Configuration.Notifier.DefaultLanguage = "zh-CN"
 			mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{})
 			mock.Ctx.SetUserValue("username", "john")
 			body, err := json.Marshal(adminResetPasswordRequestBody{Password: testPasswordNew})
@@ -771,6 +776,7 @@ func TestAdminUserPasswordPUT_ShouldSendOneSafetyNotificationAfterManualReset(t 
 					values, ok := data.(templates.EmailEventValues)
 					require.True(t, ok)
 					assert.True(t, values.Administrator)
+					assert.Equal(t, "zh-CN", values.Language)
 					assert.NotContains(t, values.Details, "Password")
 					return deliveryError
 				}),
@@ -834,6 +840,7 @@ func TestAdminUserPasswordPUT_ShouldKeepMutationAndRevocationFailuresDistinct(t 
 func adminConfigurePasswordLinks(mock *mocks.MockAutheliaCtx) {
 	mock.Ctx.Configuration.IdentityValidation.ResetPassword.JWTSecret = "test-reset-secret"
 	mock.Ctx.Configuration.IdentityValidation.ResetPassword.JWTExpiration = 5 * time.Minute
+	mock.Ctx.Configuration.Notifier.DefaultLanguage = "zh-CN"
 	mock.Ctx.Request.Header.Set(fasthttp.HeaderXForwardedProto, "https")
 	mock.Ctx.Request.Header.Set(fasthttp.HeaderXForwardedHost, "login.example.com:8080")
 }

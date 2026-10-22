@@ -1227,6 +1227,10 @@ session:
   ## You can disable the notifier startup check by setting this to true.
   # disable_startup_check: false
 
+  ## Default language for built-in notification messages: 'en' or 'zh-CN'.
+  ## Self-service messages use the supported portal language when supplied; administrator messages use this default.
+  # default_language: 'en'
+
   ##
   ## File System (Notification Provider)
   ##

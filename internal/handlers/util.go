@@ -61,6 +61,7 @@ func ctxLogEvent(ctx *middlewares.AutheliaCtx, username, description string, bod
 	}
 
 	data := templates.EmailEventValues{
+		Language:    ctx.NotificationLanguage(),
 		Title:       description,
 		DisplayName: details.DisplayName,
 		RemoteIP:    ctx.RemoteIP().String(),

@@ -63,6 +63,7 @@ type EmailTemplate struct {
 
 // EmailEventValues are the values used for event templates.
 type EmailEventValues struct {
+	Language      string
 	Administrator bool
 	Title         string
 	BodyPrefix    string
@@ -75,6 +76,7 @@ type EmailEventValues struct {
 
 // EmailIdentityVerificationJWTValues are the values used for the identity verification JWT templates.
 type EmailIdentityVerificationJWTValues struct {
+	Language           string
 	ExpiresAt          time.Time
 	NewAccount         bool
 	Administrator      bool
@@ -90,6 +92,7 @@ type EmailIdentityVerificationJWTValues struct {
 
 // EmailIdentityVerificationOTCValues are the values used for the identity verification OTC templates.
 type EmailIdentityVerificationOTCValues struct {
+	Language           string
 	ExpiresAt          time.Time
 	Title              string
 	DisplayName        string

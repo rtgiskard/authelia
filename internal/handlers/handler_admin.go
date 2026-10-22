@@ -357,6 +357,7 @@ func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.
 	}
 
 	data := templates.EmailEventValues{
+		Language:      templates.NotificationLanguage(ctx.Configuration.Notifier.DefaultLanguage),
 		Administrator: true,
 		Title:         "User created successfully",
 		DisplayName:   details.DisplayName,
@@ -392,6 +393,7 @@ func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authenticati
 	}
 
 	data := templates.EmailEventValues{
+		Language:      templates.NotificationLanguage(ctx.Configuration.Notifier.DefaultLanguage),
 		Administrator: true,
 		Title:         "Password reset successfully",
 		DisplayName:   details.DisplayName,

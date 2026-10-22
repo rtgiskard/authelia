@@ -205,6 +205,7 @@ func UserSessionElevationPOST(ctx *middlewares.AutheliaCtx) {
 	domain, _ := ctx.GetCookieDomain()
 
 	data := templates.EmailIdentityVerificationOTCValues{
+		Language:           ctx.NotificationLanguage(),
 		ExpiresAt:          otp.ExpiresAt,
 		Title:              "Confirm your identity",
 		RevocationLinkURL:  linkURL.String(),

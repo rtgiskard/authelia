@@ -89,7 +89,8 @@ the current password unchanged; creation and delivery results are reported indep
 `send_password_link` instead of the removed `generate_password` field. Password-reset submissions carry the original
 `token` alongside `password`; session state no longer grants password-reset authorization. Links expire after 30 minutes
 by default, survive form reloads and unsuccessful attempts, and all outstanding account reset links are invalidated
-after a successful password reset.
+after a successful password reset. Built-in emails support English and Simplified Chinese through
+`notifier.default_language` and supported self-service language preferences.
 
 Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
 normalization, and elevation rate-limit feedback remain supported.

@@ -23,8 +23,9 @@ in the [authentication backend](../first-factor/introduction.md), is rendered fr
 [templates](../../reference/guides/notification-templates.md), and is delivered by whichever
 [notifier](introduction.md) you have configured.
 
-Authelia does not send marketing, digest, or administrative messages, and there is no per-event configuration option to
-enable or disable an individual notification.
+Notifications cover identity verification, account invitations, and security-relevant changes; they are not marketing
+or digest messages. Security-event notifications have no per-event switch. Administrator-created accounts with a
+manually chosen password may omit the account-created notification; password setup links always require delivery.
 
 ## Events
 
@@ -32,20 +33,36 @@ enable or disable an individual notification.
 | :-------------------------: | :-----------------------------: | :-----------------------: |
 |  Password reset requested   |      `Reset your password`      | `IdentityVerificationJWT` |
 | Session elevation requested |     `Confirm your identity`     | `IdentityVerificationOTC` |
+| Administrator invites a new account | `Set your password` | `IdentityVerificationJWT` |
+| Administrator sends a reset link | `Reset your password` | `IdentityVerificationJWT` |
+| Administrator creates an account with a manual password | `User created successfully` | `Event` |
+| Administrator sets a password directly | `Password reset successfully` | `Event` |
 |  Password reset completed   | `Password changed successfully` |          `Event`          |
 |      Password changed       | `Password changed successfully` |          `Event`          |
 |  Second factor registered   |  `Second Factor Method Added`   |          `Event`          |
 |    Second factor removed    | `Second Factor Method Removed`  |          `Event`          |
 
-The subject line is also used as the `{{ .Title }}` placeholder within the template.
+Subjects above are the English variants; built-in messages also support Simplified Chinese. The localized subject is
+used as the `{{ .Title }}` placeholder. See [default_language](introduction.md#default_language).
 
 ### Password reset requested
 
-Sent when a user requests a password reset from the sign-in portal. The notification contains a single-use link which
-proves the recipient controls the mailbox, and a second link which revokes the request.
+Sent when a user requests a password reset from the sign-in portal, or an administrator sends an existing user a reset
+link. Opening or refreshing the form does not use the link; only a successful password change consumes it and revokes
+the account's other outstanding reset links. The email includes the expiration time and a link to cancel that request.
+Sending a link does not change the current password, even if notification delivery fails.
 
 This notification is sent whether or not the requested user exists, from the perspective of the requester: the portal
 always responds identically in order to prevent user enumeration. No notification is sent when the user does not exist.
+
+### Administrator invites a new account
+
+When an administrator chooses to send a password setup link, the account is created with an undisclosed random initial
+password. The invitation contains a setup link, never the initial password. Choosing a new password completes the normal
+reset flow. Administrators may instead set a password manually; no password is included in the optional creation email.
+
+Failed invitation delivery does not undo account creation. The management portal reports the delivery failure separately
+so the administrator can send a fresh setup link without creating the account again.
 
 ### Session elevation requested
 
@@ -60,6 +77,9 @@ Sent to the user after their password has been successfully changed via the pass
 ### Password changed
 
 Sent to the user after they have successfully changed their own password from the settings area.
+
+When an administrator directly sets a password, the user receives a security-event notification without the new
+password. This is distinct from sending a setup link, which sends no password-change event until the user completes it.
 
 ### Second factor registered
 

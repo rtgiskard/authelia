@@ -4,15 +4,21 @@
 
 import * as React from "react";
 
-import { Link, Text } from "react-email";
+import { Text } from "react-email";
 
 export const Brand = () => {
     return (
-        <Text className="text-[#666666] text-[10px] leading-[24px] text-center text-muted">
-            Powered by{" "}
-            <Link href="https://www.authelia.com" target="_blank" className="text-[#666666]">
-                Authelia
-            </Link>
+        <Text
+            style={{
+                color: "#1976d2",
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "2px",
+                lineHeight: "20px",
+                margin: "0 0 24px",
+            }}
+        >
+            Authelia
         </Text>
     );
 };

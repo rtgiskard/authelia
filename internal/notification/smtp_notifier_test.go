@@ -336,11 +336,11 @@ func TestSMTPNotifier_Send_ErrorRecipient(t *testing.T) {
 	assert.EqualError(t, notifier.Send(context.Background(), mail.Address{}, "example subject", et, nil), "notifier: smtp: failed to create envelope: failed to set to address: failed to parse mail address \"<@>\": mail: invalid string")
 }
 
-func TestSMTPNotifier_Send_ErrorClose(t *testing.T) {
+func TestSMTPNotifier_Send_SuccessDespiteCloseError(t *testing.T) {
 	ctrl, factory, client, et := SetupMockTest(t)
 	defer ctrl.Finish()
 
-	logger, _ := test.NewNullLogger()
+	logger, hook := test.NewNullLogger()
 	logger.Level = logrus.TraceLevel
 
 	notifier := SetupNotifier(factory, logger)
@@ -357,7 +357,10 @@ func TestSMTPNotifier_Send_ErrorClose(t *testing.T) {
 		client.EXPECT().Close().Return(fmt.Errorf("bad connection")),
 	)
 
-	assert.EqualError(t, notifier.Send(context.Background(), mail.Address{Name: "Example One", Address: "admin@example.cm"}, "example subject", et, nil), "notifier: smtp: failed to close connection: bad connection")
+	assert.NoError(t, notifier.Send(context.Background(), mail.Address{Name: "Example One", Address: "admin@example.cm"}, "example subject", et, nil))
+	require.NotNil(t, hook.LastEntry())
+	assert.Equal(t, logrus.WarnLevel, hook.LastEntry().Level)
+	assert.Equal(t, "Notification sent, but SMTP connection cleanup failed", hook.LastEntry().Message)
 }
 
 func TestSMTPNotifier_Send_ErrorSend(t *testing.T) {

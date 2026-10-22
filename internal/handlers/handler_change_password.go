@@ -124,6 +124,7 @@ func ChangePasswordPOST(ctx *middlewares.AutheliaCtx) {
 	}
 
 	data := templates.EmailEventValues{
+		Language:    ctx.NotificationLanguage(),
 		Title:       "Password changed successfully",
 		DisplayName: userInfo.DisplayName,
 		RemoteIP:    ctx.RemoteIP().String(),

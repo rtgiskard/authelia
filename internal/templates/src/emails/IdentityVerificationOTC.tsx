@@ -4,140 +4,136 @@
 
 import * as React from "react";
 
-import { Body, Container, Head, Heading, Hr, Html, Preview, Section, Text, Tailwind, Button, Link } from "react-email";
+import { Body, Container, Head, Heading, Html, Link, Preview, Section, Text } from "react-email";
 
 import { Brand } from "../components/Brand";
 
 interface Props {
+    language?: string;
     title?: string;
     displayName?: string;
-    domain?: string;
-    remoteIP?: string;
+    greeting?: string;
+    body?: string;
+    expires?: string;
+    privacy?: string;
+    otherAction?: string;
     oneTimeCode?: string;
     revocationLinkURL?: string;
     revocationLinkText?: string;
+    revocationPrefix?: string;
+    revocationSuffix?: string;
     hidePreview?: boolean;
     isPlainText?: boolean;
 }
 
-export const IdentityVerificationOTC = ({
-    title,
-    displayName,
-    domain,
-    remoteIP,
-    oneTimeCode,
-    revocationLinkURL,
-    revocationLinkText,
-    hidePreview,
-    isPlainText,
-}: Props) => {
-    return (
-        <Html lang="en" dir="ltr">
-            <Tailwind>
-                <Head />
-                {hidePreview ? null : (
-                    <Preview>{title || "A one-time code has been generated for session elevation"}</Preview>
+export const IdentityVerificationOTC = (props: Props) => (
+    <Html lang={props.language || "en"} dir="ltr">
+        <Head />
+        {props.hidePreview ? null : <Preview>{props.title ?? ""}</Preview>}
+        <Body
+            style={{
+                fontFamily: "Arial, Helvetica, sans-serif",
+                fontSize: "15px",
+                lineHeight: "24px",
+                color: "#222222",
+                backgroundColor: "#f5f5f5",
+                margin: 0,
+                padding: "16px 12px",
+            }}
+        >
+            <Container
+                style={{
+                    width: "100%",
+                    maxWidth: "560px",
+                    boxSizing: "border-box",
+                    margin: "16px auto",
+                    padding: "28px 24px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e5e5e5",
+                    borderRadius: "8px",
+                }}
+            >
+                <Brand />
+                <Heading
+                    style={{
+                        fontSize: "26px",
+                        fontWeight: 600,
+                        lineHeight: "34px",
+                        letterSpacing: "-0.5px",
+                        margin: "0 0 24px",
+                    }}
+                >
+                    {props.title}
+                </Heading>
+                <Text style={{ fontSize: "15px", lineHeight: "24px", margin: "0 0 16px", overflowWrap: "anywhere" }}>
+                    {props.greeting} {props.displayName},
+                </Text>
+                <Text style={{ fontSize: "15px", lineHeight: "24px", margin: "0 0 20px" }}>{props.body}</Text>
+                <Section
+                    style={{
+                        backgroundColor: "#f5f8fc",
+                        border: "1px solid #dbe7f5",
+                        borderRadius: "6px",
+                        padding: "20px 12px",
+                        marginBottom: "24px",
+                        textAlign: "center",
+                    }}
+                >
+                    <Text
+                        id="one-time-code"
+                        style={{
+                            fontFamily: "'Courier New', monospace",
+                            color: "#222222",
+                            fontSize: "32px",
+                            lineHeight: "40px",
+                            fontWeight: 700,
+                            letterSpacing: "4px",
+                            margin: 0,
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                        }}
+                    >
+                        {props.oneTimeCode}
+                    </Text>
+                    <Text style={{ fontSize: "13px", lineHeight: "20px", color: "#525252", margin: "8px 0 0" }}>
+                        {props.expires}
+                    </Text>
+                </Section>
+                <Text style={{ fontSize: "14px", lineHeight: "22px", color: "#525252", margin: "0 0 12px" }}>
+                    {props.privacy}
+                </Text>
+                <Text style={{ fontSize: "14px", lineHeight: "22px", color: "#525252", margin: "0 0 12px" }}>
+                    {props.otherAction}
+                </Text>
+                {props.revocationPrefix}
+                {props.isPlainText ? (
+                    <Text>
+                        {props.revocationLinkText}: {props.revocationLinkURL}
+                    </Text>
+                ) : (
+                    <Text style={{ fontSize: "14px", lineHeight: "22px", margin: "0 0 12px" }}>
+                        <Link href={props.revocationLinkURL} style={{ color: "#525252", textDecoration: "underline" }}>
+                            {props.revocationLinkText}
+                        </Link>
+                    </Text>
                 )}
-                <Body className="bg-white my-auto mx-auto font-sans px-2">
-                    <Container className="border border-solid border-[#eaeaea] rounded my-[40px] mx-auto p-[20px] max-w-[465px]">
-                        <Heading className="text-black text-[24px] font-normal text-center p-0 my-[30px] mx-0">
-                            A <strong>one-time code</strong> has been generated to complete a requested action
-                        </Heading>
-                        <Text className="text-black text-[14px] leading-[24px]">Hi {displayName},</Text>
-                        <Text className="text-black text-[14px] leading-[24px]">
-                            This notification has been sent to you in order to verify your identity to{" "}
-                            <strong>change security details</strong> for your account at <i>{domain}</i>.{" "}
-                        </Text>
-                        <Text className="text-black text-[14px] leading-[24px] text-center">
-                            <strong>
-                                Do not share this notification or the content of this notification with anyone.
-                            </strong>
-                        </Text>
-                        <Text className="text-black text-[14px] leading-[24px]">
-                            {" "}
-                            The following <i>one-time code</i> should only be used in the prompt displayed in your
-                            browser.
-                        </Text>
-
-                        <Hr className="border border-solid border-[#eaeaea] my-[26px] mx-0 w-full" />
-                        <Section>
-                            <Text
-                                id="one-time-code"
-                                className="text-black text-center tracking-[0.5rem] font-bold text-lg"
-                                style={{ marginRight: "-0.5rem !important" }}
-                            >
-                                {oneTimeCode}
-                            </Text>
-                        </Section>
-                        <Hr className="border border-solid border-[#eaeaea] my-[26px] mx-0 w-full" />
-                        <Text className="text-black text-[14px] leading-[24px]">
-                            If you did not initiate the process your credentials may have been compromised and you
-                            should:
-                        </Text>
-                        <Section className="text-black text-[14px] leading-[22px]">
-                            <ol>
-                                <li>Revoke this code using the provided links below</li>
-                                <li>Reset your password or other login credentials</li>
-                                <li>Contact an Administrator</li>
-                            </ol>
-                        </Section>
-                        {isPlainText ? (
-                            <Text className="text-black text-[14px] leading-[24px] text-center">
-                                To revoke the code, click the link below:
-                            </Text>
-                        ) : (
-                            <Section className="text-center">
-                                <Button
-                                    id="link-revoke"
-                                    href={revocationLinkURL}
-                                    className="bg-[#f50057] rounded text-white text-[12px] font-semibold no-underline text-center px-5 py-3"
-                                >
-                                    {revocationLinkText}
-                                </Button>
-                            </Section>
-                        )}
-                        {isPlainText ? (
-                            <Text className="text-black text-[12px] leading-[24px] text-center">
-                                {revocationLinkURL}
-                            </Text>
-                        ) : (
-                            <Text className="text-black text-[14px] leading-[24px] text-center">
-                                To revoke the code click the above button or alternatively copy and paste this URL into
-                                your browser:{" "}
-                            </Text>
-                        )}
-                        {!isPlainText && (
-                            <Text className="text-black text-[12px] leading-[24px] text-center">
-                                <Link href={revocationLinkURL} className="text-blue-600 no-underline">
-                                    {revocationLinkURL}
-                                </Link>
-                            </Text>
-                        )}
-                        <Hr className="border border-solid border-[#eaeaea] my-[26px] mx-0 w-full" />
-                        <Text className="text-[#666666] text-[12px] leading-[24px] text-center">
-                            This notification was intended for <span className="text-black">{displayName}</span>. This
-                            one-time code was generated due to an action from{" "}
-                            <span className="text-black">{remoteIP}</span>. If you do not believe that your actions
-                            could have triggered this event or if you are concerned about your account's safety, please
-                            follow the explicit directions in this notification.
-                        </Text>
-                    </Container>
-                    <Brand />
-                </Body>
-            </Tailwind>
-        </Html>
-    );
-};
+                {props.revocationSuffix}
+            </Container>
+        </Body>
+    </Html>
+);
 
 IdentityVerificationOTC.PreviewProps = {
     title: "Confirm your identity",
     displayName: "John Doe",
-    domain: "example.com",
+    greeting: "Hello",
+    body: "Enter this code in the page where you requested it.",
+    expires: "Expires at: 2026-10-22 12:05:00 UTC",
+    privacy: "Do not share this code.",
+    otherAction: "If you did not request this code, cancel it and contact your administrator.",
     oneTimeCode: "ABC123",
-    revocationLinkURL: "https://auth.example.com",
-    revocationLinkText: "Revoke",
-    remoteIP: "127.0.0.1",
-    isPlainText: false,
+    revocationLinkURL: "https://auth.example.com/revoke/one-time-code?id=example",
+    revocationLinkText: "Cancel this code",
 } as Props;
 
 export default IdentityVerificationOTC;

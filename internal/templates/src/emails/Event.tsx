@@ -4,16 +4,19 @@
 
 import * as React from "react";
 
-import { Body, Container, Head, Hr, Html, Preview, Section, Text, Tailwind } from "react-email";
+import { Body, Container, Head, Heading, Html, Preview, Section, Text } from "react-email";
 
 import { Brand } from "../components/Brand";
 
 export interface Props {
+    language?: string;
     title?: string;
-    bodyEvent?: string;
-    bodyPrefix?: string;
-    bodySuffix?: string;
     displayName?: string;
+    greeting?: string;
+    ownAction?: string;
+    otherAction?: string;
+    detailsLabel?: string;
+    remoteIPLabel?: string;
     remoteIP?: string;
     detailsKey?: string;
     detailsValue?: string;
@@ -22,72 +25,106 @@ export interface Props {
     hidePreview?: boolean;
 }
 
-export const Event = ({
-    title,
-    bodyEvent,
-    bodyPrefix,
-    bodySuffix,
-    displayName,
-    remoteIP,
-    detailsKey,
-    detailsValue,
-    detailsPrefix,
-    detailsSuffix,
-    hidePreview,
-}: Props) => {
-    return (
-        <Html lang="en" dir="ltr">
-            <Tailwind>
-                <Head />
-                {hidePreview ? null : <Preview>An important event has occurred with your account</Preview>}
-                <Body className="bg-white my-auto mx-auto font-sans px-2">
-                    <Container className="border border-solid border-[#eaeaea] rounded my-[40px] mx-auto p-[20px] max-w-[465px]">
-                        {title ? (
-                            <Text className="text-black text-[24px] font-normal text-center p-0 my-[30px] mx-0">
-                                {title}
-                            </Text>
-                        ) : null}
-                        <Text className="text-black text-[14px] leading-[24px]">Hi {displayName},</Text>
-                        <Text className="text-black text-[14px] leading-[24px]">
-                            This notification has been sent to you in order to notify you that {bodyPrefix}{" "}
-                            <strong>
-                                <i>{bodyEvent}</i>
-                            </strong>{" "}
-                            {bodySuffix}
-                        </Text>
-                        <Hr className="border border-solid border-[#eaeaea] my-[26px] mx-0 w-full" />
-                        <Text>Event Details:</Text>
-                        <Section className="m-2">
-                            {detailsPrefix}
-                            <Text>
-                                <strong>{detailsKey}:</strong> {detailsValue}
-                            </Text>
-                            {detailsSuffix}
-                        </Section>
-                        <Hr className="border border-solid border-[#eaeaea] my-[26px] mx-0 w-full" />
-                        <Text className="text-[#666666] text-[12px] leading-[24px] text-center">
-                            This notification was intended for <span className="text-black">{displayName}</span>. This
-                            event notification was generated due to an action from{" "}
-                            <span className="text-black">{remoteIP}</span>. If you do not believe that your actions
-                            could have triggered this event or if you are concerned about your account's safety, please
-                            change your password and reach out to an administrator.
-                        </Text>
-                    </Container>
-                    <Brand />
-                </Body>
-            </Tailwind>
-        </Html>
-    );
-};
+export const Event = (props: Props) => (
+    <Html lang={props.language || "en"} dir="ltr">
+        <Head />
+        {props.hidePreview ? null : <Preview>{props.title ?? ""}</Preview>}
+        <Body
+            style={{
+                fontFamily: "Arial, Helvetica, sans-serif",
+                fontSize: "15px",
+                lineHeight: "24px",
+                color: "#222222",
+                backgroundColor: "#f5f5f5",
+                margin: 0,
+                padding: "16px 12px",
+            }}
+        >
+            <Container
+                style={{
+                    width: "100%",
+                    maxWidth: "560px",
+                    boxSizing: "border-box",
+                    margin: "16px auto",
+                    padding: "28px 24px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e5e5e5",
+                    borderRadius: "8px",
+                }}
+            >
+                <Brand />
+                <Heading
+                    style={{
+                        fontSize: "26px",
+                        fontWeight: 600,
+                        lineHeight: "34px",
+                        letterSpacing: "-0.5px",
+                        margin: "0 0 24px",
+                    }}
+                >
+                    {props.title}
+                </Heading>
+                <Text style={{ fontSize: "15px", lineHeight: "24px", margin: "0 0 16px", overflowWrap: "anywhere" }}>
+                    {props.greeting} {props.displayName},
+                </Text>
+                <Text style={{ fontSize: "15px", lineHeight: "24px", margin: "0 0 12px" }}>{props.ownAction}</Text>
+                <Text style={{ fontSize: "15px", lineHeight: "24px", margin: "0 0 20px" }}>{props.otherAction}</Text>
+                <Section style={{ borderTop: "1px solid #e5e5e5", paddingTop: "20px", marginTop: "24px" }}>
+                    <Heading
+                        as="h2"
+                        style={{
+                            fontSize: "15px",
+                            fontWeight: 600,
+                            lineHeight: "22px",
+                            color: "#525252",
+                            margin: "0 0 12px",
+                        }}
+                    >
+                        {props.detailsLabel}
+                    </Heading>
+                    {props.detailsPrefix}
+                    <Text
+                        style={{
+                            fontSize: "13px",
+                            lineHeight: "20px",
+                            color: "#525252",
+                            margin: "0 0 8px",
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                        }}
+                    >
+                        <strong>{props.detailsKey}:</strong> {props.detailsValue}
+                    </Text>
+                    {props.detailsSuffix}
+                    <Text
+                        style={{
+                            fontSize: "13px",
+                            lineHeight: "20px",
+                            color: "#737373",
+                            margin: "12px 0 0",
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                        }}
+                    >
+                        {props.remoteIPLabel}: {props.remoteIP}
+                    </Text>
+                </Section>
+            </Container>
+        </Body>
+    </Html>
+);
 
 Event.PreviewProps = {
+    title: "Password changed successfully",
     displayName: "John Doe",
-    detailsKey: "Example Detail",
-    detailsValue: "Example Value",
-    title: "Second Factor Method Added",
-    bodyEvent: "Second Factor Method",
-    bodyPrefix: "a",
-    bodySuffix: "was added to your account.",
+    greeting: "Hello",
+    ownAction: "If this was you, no action is needed.",
+    otherAction:
+        "If this was not you, reset your password from your usual sign-in page and contact your administrator.",
+    detailsLabel: "Event details",
+    detailsKey: "Action",
+    detailsValue: "Password Change",
+    remoteIPLabel: "Request IP",
     remoteIP: "127.0.0.1",
 } as Props;
 
