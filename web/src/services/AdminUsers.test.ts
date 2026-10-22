@@ -18,15 +18,15 @@ vi.mock("@services/Client", () => ({
     PutWithOptionalResponse: vi.fn(),
 }));
 
-it("maps generated-password creation to a sent notification", async () => {
+it("maps password-link creation to a sent notification", async () => {
     const payload = {
         disabled: false,
-        display_name: "Generated User",
-        email: "generated@example.com",
-        generate_password: true,
+        display_name: "Link User",
+        email: "link@example.com",
         groups: [],
         notify: true,
-        username: "generated",
+        send_password_link: true,
+        username: "link-user",
     };
 
     vi.mocked(PostWithOptionalResponse).mockResolvedValue({
@@ -119,7 +119,6 @@ it("does not expose raw notification errors from create responses", async () => 
 
     await expect(createAdminUser(payload)).resolves.toEqual({
         notification: {
-            message: "User saved but email notification could not be sent",
             status: "failed",
         },
     });
@@ -131,10 +130,9 @@ it("normalizes null users from the list endpoint", async () => {
     await expect(listAdminUsers("missing")).resolves.toEqual([]);
 });
 
-it("resets a user password with generated password notification", async () => {
+it("resets a user password with password link notification", async () => {
     const payload = {
-        generate_password: true,
-        notify: true,
+        send_password_link: true,
     };
 
     vi.mocked(PutWithOptionalResponse).mockResolvedValue({
@@ -148,8 +146,7 @@ it("resets a user password with generated password notification", async () => {
 
 it("maps password reset notification failures without exposing raw errors", async () => {
     const payload = {
-        generate_password: true,
-        notify: true,
+        send_password_link: true,
     };
 
     vi.mocked(PutWithOptionalResponse).mockResolvedValue({
@@ -159,8 +156,35 @@ it("maps password reset notification failures without exposing raw errors", asyn
 
     await expect(resetAdminUserPassword("john/doe", payload)).resolves.toEqual({
         notification: {
-            message: "User saved but email notification could not be sent",
             status: "failed",
         },
+    });
+});
+
+it("maps skipped safety mail to a stable status without exposing the service reason", async () => {
+    vi.mocked(PutWithOptionalResponse).mockResolvedValue({
+        notification_reason: "No email address is configured",
+        notification_sent: false,
+    });
+
+    await expect(resetAdminUserPassword("alice", { password: "password123" })).resolves.toEqual({
+        notification: { status: "skipped" },
+    });
+    expect(PutWithOptionalResponse).toHaveBeenLastCalledWith(
+        "/admin/users/alice/password",
+        { password: "password123" },
+        undefined,
+    );
+});
+
+it("preserves successful mutation with a stable link revocation warning", async () => {
+    vi.mocked(PutWithOptionalResponse).mockResolvedValue({
+        notification_sent: true,
+        reset_links_revocation_error: "storage credentials must not be exposed",
+    });
+
+    await expect(resetAdminUserPassword("alice", { password: "password123" })).resolves.toEqual({
+        notification: { status: "sent" },
+        reset_links_revocation_failed: true,
     });
 });

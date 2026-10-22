@@ -156,6 +156,9 @@ type Provider interface {
 	// RevokeIdentityVerification marks an identity verification record in the storage provider as revoked.
 	RevokeIdentityVerification(ctx context.Context, jti string, ip model.NullIP) (err error)
 
+	// RevokeIdentityVerifications revokes all outstanding authorizations for a user's action.
+	RevokeIdentityVerifications(ctx context.Context, username, action string, ip model.NullIP) (err error)
+
 	// FindIdentityVerification checks if an identity verification record is in the storage provider and active.
 	FindIdentityVerification(ctx context.Context, jti string) (found bool, err error)
 

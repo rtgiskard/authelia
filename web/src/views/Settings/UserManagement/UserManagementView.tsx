@@ -42,6 +42,7 @@ import {
 } from "@components/UI/Dialog";
 import { Input } from "@components/UI/Input";
 import { Label } from "@components/UI/Label";
+import { RadioGroup, RadioGroupItem } from "@components/UI/RadioGroup";
 import { Spinner } from "@components/UI/Spinner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@components/UI/Tooltip";
 import { useNotifications } from "@contexts/NotificationsContext";
@@ -66,6 +67,7 @@ import {
 } from "@services/AdminUsers";
 import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
 import { type UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
+import { getResetPassword, getResetPasswordCustomURL } from "@utils/Configuration";
 import IdentityVerificationDialog from "@views/Settings/Common/IdentityVerificationDialog";
 import SecondFactorDialog from "@views/Settings/Common/SecondFactorDialog";
 
@@ -73,7 +75,7 @@ interface UserFormValues {
     disabled: boolean;
     displayName: string;
     email: string;
-    generatePassword: boolean;
+    sendPasswordLink: boolean;
     groups: string;
     notify: boolean;
     password: string;
@@ -81,7 +83,7 @@ interface UserFormValues {
 }
 
 interface PasswordResetFormValues {
-    generatePassword: boolean;
+    sendPasswordLink: boolean;
     password: string;
 }
 
@@ -139,6 +141,7 @@ interface PasswordResetDialogProps {
     passwordPolicy: PasswordPolicyConfiguration;
     selectedUser: PasswordResetUserDetails;
     title: string;
+    username: string;
     values: PasswordResetFormValues;
     setValues: (updater: (previous: PasswordResetFormValues) => PasswordResetFormValues) => void;
 }
@@ -147,10 +150,10 @@ const defaultCreateValues: UserFormValues = {
     disabled: false,
     displayName: "",
     email: "",
-    generatePassword: false,
     groups: "",
-    notify: true,
+    notify: false,
     password: "",
+    sendPasswordLink: false,
     username: "",
 };
 
@@ -158,16 +161,16 @@ const defaultEditValues: UserFormValues = {
     disabled: false,
     displayName: "",
     email: "",
-    generatePassword: false,
     groups: "",
     notify: true,
     password: "",
+    sendPasswordLink: false,
     username: "",
 };
 
 const defaultPasswordResetValues: PasswordResetFormValues = {
-    generatePassword: false,
     password: "",
+    sendPasswordLink: false,
 };
 
 const defaultPasswordResetUserDetails: PasswordResetUserDetails = {
@@ -211,12 +214,12 @@ const toCreatePayload = (values: UserFormValues): AdminCreateUserPayload => {
         display_name: values.displayName.trim(),
         email: values.email.trim(),
         groups: toGroupsArray(values.groups),
-        notify: values.generatePassword ? true : values.notify,
+        notify: values.sendPasswordLink ? true : values.notify,
         username: values.username.trim(),
     };
 
-    if (values.generatePassword) {
-        payload.generate_password = true;
+    if (values.sendPasswordLink) {
+        payload.send_password_link = true;
     } else {
         payload.password = values.password;
     }
@@ -232,10 +235,9 @@ const toUpdatePayload = (values: UserFormValues): AdminUpdateUserPayload => ({
 });
 
 const toPasswordResetPayload = (values: PasswordResetFormValues): AdminPasswordResetPayload =>
-    values.generatePassword
+    values.sendPasswordLink
         ? {
-              generate_password: true,
-              notify: true,
+              send_password_link: true,
           }
         : {
               password: values.password,
@@ -248,10 +250,10 @@ const fromUser = (user: AdminUser): UserFormValues => ({
     disabled: user.disabled,
     displayName: user.display_name,
     email: user.email,
-    generatePassword: false,
     groups: toGroupsValue(user.groups),
     notify: user.email.trim() !== "",
     password: "",
+    sendPasswordLink: false,
     username: user.username,
 });
 
@@ -679,7 +681,7 @@ const UserManagementView = () => {
         const payload = toCreatePayload(createValues);
         const nextErrors = {
             email: payload.email === "",
-            password: !payload.generate_password && (payload.password ?? "") === "",
+            password: !payload.send_password_link && (payload.password ?? "") === "",
             username: payload.username === "",
         };
         const usernameConflict = hasUsernameConflict(identityUsers, payload.username);
@@ -726,7 +728,7 @@ const UserManagementView = () => {
             handleRefresh();
         } catch (error) {
             console.error(error);
-            if (!payload.generate_password && isWeakPasswordError(error)) {
+            if (!payload.send_password_link && isWeakPasswordError(error)) {
                 setCreateErrors((previous) => ({ ...previous, password: true }));
                 createErrorNotification(
                     translate("Your supplied password does not meet the password policy requirements"),
@@ -861,11 +863,14 @@ const UserManagementView = () => {
         event.preventDefault();
 
         const payload = toPasswordResetPayload(passwordResetValues);
-        const passwordMissing = !payload.generate_password && (payload.password ?? "") === "";
+        const passwordMissing = !payload.send_password_link && (payload.password ?? "") === "";
 
         setPasswordResetErrors({ password: passwordMissing });
 
-        if (payload.generate_password && (!canNotify || passwordResetUserDetails.email.trim() === "")) {
+        if (
+            payload.send_password_link &&
+            (!getResetPassword() || getResetPasswordCustomURL() || passwordResetUserDetails.email.trim() === "")
+        ) {
             createErrorNotification(translate("Email notification is unavailable for this user"));
 
             return;
@@ -881,12 +886,27 @@ const UserManagementView = () => {
 
         try {
             const response = await resetAdminUserPassword(passwordResetUsername, payload);
-            createSuccessNotification(translate("Password reset successfully"));
-            handleNotificationFeedback(response, passwordResetUserDetails.email, payload.notify ?? false);
+            if (payload.send_password_link) {
+                if (response?.notification?.status === "sent") {
+                    createSuccessNotification(translate("Password setup link sent"));
+                } else {
+                    createWarnNotification(
+                        translate("Password setup link could not be sent. The password was not changed"),
+                    );
+                }
+            } else {
+                createSuccessNotification(translate("Password reset successfully"));
+                handleNotificationFeedback(response, passwordResetUserDetails.email, true);
+                if (response?.reset_links_revocation_failed) {
+                    createWarnNotification(
+                        translate("Password changed, but existing reset links could not be invalidated"),
+                    );
+                }
+            }
             handleClosePasswordReset();
         } catch (error) {
             console.error(error);
-            if (!payload.generate_password && isWeakPasswordError(error)) {
+            if (!payload.send_password_link && isWeakPasswordError(error)) {
                 setPasswordResetErrors({ password: true });
                 createErrorNotification(
                     translate("Your supplied password does not meet the password policy requirements"),
@@ -1056,6 +1076,7 @@ const UserManagementView = () => {
                 passwordPolicy={passwordPolicy}
                 selectedUser={passwordResetUserDetails}
                 title={translate("Reset Password")}
+                username={passwordResetUsername}
                 values={passwordResetValues}
                 setValues={setPasswordResetValues}
             />
@@ -1361,18 +1382,16 @@ const UserManagementView = () => {
 
     function showNotificationStatus(notification: AdminCreateUserNotificationStatus) {
         if (notification.status === "sent") {
-            createSuccessNotification(notification.message ?? translate("Email notification sent"));
+            createSuccessNotification(translate("Email notification sent"));
             return;
         }
 
         if (notification.status === "skipped") {
-            createInfoNotification(notification.message ?? translate("Email notification was skipped"));
+            createInfoNotification(translate("Email notification was skipped"));
             return;
         }
 
-        createWarnNotification(
-            notification.message ?? translate("User saved but email notification could not be sent"),
-        );
+        createWarnNotification(translate("Email notification could not be sent"));
     }
 };
 
@@ -1396,7 +1415,7 @@ const UserDialog = ({
     const { t: translate } = useTranslation("settings");
     const groupValues = useMemo(() => toGroupsArray(values.groups), [values.groups]);
     const notificationEnabled = canNotify && values.email.trim() !== "";
-    const generatingPassword = showPassword && values.generatePassword;
+    const sendingPasswordLink = showPassword && values.sendPasswordLink;
     const passwordPolicyEnabled = passwordPolicy.mode !== PasswordPolicyMode.Disabled;
     const usernameError = errors.username || Boolean(helperText.username);
     const emailError = errors.email || Boolean(helperText.email);
@@ -1468,9 +1487,8 @@ const UserDialog = ({
                                     setValues((previous) => ({
                                         ...previous,
                                         email: event.target.value,
-                                        generatePassword:
-                                            event.target.value.trim() === "" ? false : previous.generatePassword,
-                                        notify: previous.generatePassword || previous.notify,
+                                        sendPasswordLink:
+                                            event.target.value.trim() === "" ? false : previous.sendPasswordLink,
                                     }))
                                 }
                             />
@@ -1478,27 +1496,26 @@ const UserDialog = ({
                                 <p className="mt-1 text-sm text-destructive">{helperText.email}</p>
                             ) : null}
                         </div>
-                        {showPassword && canNotify ? (
+                        {showPassword && canNotify && getResetPassword() && !getResetPasswordCustomURL() ? (
                             <div className="flex items-start gap-3 text-sm">
                                 <Checkbox
-                                    checked={values.generatePassword}
+                                    checked={values.sendPasswordLink}
                                     disabled={loading || values.email.trim() === ""}
-                                    id="user-dialog-generate-password"
+                                    id="user-dialog-send-password-link"
                                     onCheckedChange={(checked) =>
                                         setValues((previous) => ({
                                             ...previous,
-                                            generatePassword: checked === true,
-                                            notify: checked === true ? true : previous.notify,
                                             password: checked === true ? "" : previous.password,
+                                            sendPasswordLink: checked === true,
                                         }))
                                     }
                                 />
-                                <Label htmlFor="user-dialog-generate-password">
-                                    {translate("Generate random password and email it to the user")}
+                                <Label htmlFor="user-dialog-send-password-link">
+                                    {translate("Send a password setup link to the user")}
                                 </Label>
                             </div>
                         ) : null}
-                        {showPassword && !generatingPassword ? (
+                        {showPassword && !sendingPasswordLink ? (
                             <div>
                                 <Label className="mb-2" htmlFor="user-dialog-password">
                                     {translate("Password")} *
@@ -1567,8 +1584,8 @@ const UserDialog = ({
                         {showPassword ? (
                             <div className="flex items-start gap-3 text-sm">
                                 <Checkbox
-                                    checked={values.notify}
-                                    disabled={loading || !notificationEnabled || values.generatePassword}
+                                    checked={values.sendPasswordLink || values.notify}
+                                    disabled={loading || !notificationEnabled || values.sendPasswordLink}
                                     id="user-dialog-notify"
                                     onCheckedChange={(checked) =>
                                         setValues((previous) => ({
@@ -1615,10 +1632,11 @@ const PasswordResetDialog = ({
     selectedUser,
     setValues,
     title,
+    username,
     values,
 }: PasswordResetDialogProps) => {
     const { t: translate } = useTranslation("settings");
-    const canGeneratePassword = canNotify && selectedUser.email.trim() !== "";
+    const canSendPasswordLink = getResetPassword() && !getResetPasswordCustomURL() && selectedUser.email.trim() !== "";
     const passwordPolicyEnabled = passwordPolicy.mode !== PasswordPolicyMode.Disabled;
 
     return (
@@ -1629,30 +1647,61 @@ const PasswordResetDialog = ({
             }}
         >
             <DialogContent className="max-h-[90vh] overflow-y-auto" showCloseButton={false}>
-                <form noValidate onSubmit={onSubmit}>
+                <form className="space-y-6" noValidate onSubmit={onSubmit}>
                     <DialogHeader>
                         <DialogTitle>{title}</DialogTitle>
-                        <DialogDescription>{translate("Set a new password for this user")}</DialogDescription>
+                        <DialogDescription>{translate("Choose how to reset this user's password")}</DialogDescription>
                     </DialogHeader>
-                    <div className="mt-6 space-y-4">
-                        <div className="flex items-start gap-3 text-sm">
-                            <Checkbox
-                                checked={values.generatePassword}
-                                disabled={loading || !canGeneratePassword}
-                                id="password-reset-generate"
-                                onCheckedChange={(checked) =>
+                    <div className="space-y-4">
+                        <dl className="grid gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-2">
+                            <div className="min-w-0">
+                                <dt className="text-muted-foreground">{translate("Username")}</dt>
+                                <dd className="mt-1 break-all font-medium">{username}</dd>
+                            </div>
+                            <div className="min-w-0">
+                                <dt className="text-muted-foreground">{translate("Email")}</dt>
+                                <dd className="mt-1 break-all font-medium">
+                                    {selectedUser.email || translate("Not Set")}
+                                </dd>
+                            </div>
+                        </dl>
+                        <fieldset disabled={loading} className="space-y-3">
+                            <legend className="mb-3 text-sm font-medium">{translate("Reset method")}</legend>
+                            <RadioGroup
+                                aria-describedby="password-reset-mode-description"
+                                aria-label={translate("Reset method")}
+                                disabled={loading}
+                                value={values.sendPasswordLink ? "link" : "password"}
+                                onValueChange={(value) =>
                                     setValues((previous) => ({
                                         ...previous,
-                                        generatePassword: checked === true,
-                                        password: checked === true ? "" : previous.password,
+                                        password: value === "link" ? "" : previous.password,
+                                        sendPasswordLink: value === "link",
                                     }))
                                 }
-                            />
-                            <Label htmlFor="password-reset-generate">
-                                {translate("Generate random password and email it to the user")}
-                            </Label>
-                        </div>
-                        {!canGeneratePassword ? (
+                            >
+                                <div className="flex items-center gap-3">
+                                    <RadioGroupItem
+                                        disabled={!canSendPasswordLink}
+                                        id="password-reset-send-link"
+                                        value="link"
+                                    />
+                                    <Label htmlFor="password-reset-send-link">{translate("Send Reset Link")}</Label>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <RadioGroupItem id="password-reset-direct" value="password" />
+                                    <Label htmlFor="password-reset-direct">{translate("Set password directly")}</Label>
+                                </div>
+                            </RadioGroup>
+                            <p className="text-sm text-muted-foreground" id="password-reset-mode-description">
+                                {translate(
+                                    values.sendPasswordLink
+                                        ? "The current password remains valid until the user chooses a new one"
+                                        : "The new password takes effect immediately when you save",
+                                )}
+                            </p>
+                        </fieldset>
+                        {!canSendPasswordLink ? (
                             <Alert>
                                 <AlertDescription>
                                     {canNotify
@@ -1661,7 +1710,7 @@ const PasswordResetDialog = ({
                                 </AlertDescription>
                             </Alert>
                         ) : null}
-                        {!values.generatePassword ? (
+                        {!values.sendPasswordLink ? (
                             <div>
                                 <Label className="mb-2" htmlFor="password-reset-password">
                                     {translate("New Password")} *
@@ -1686,12 +1735,14 @@ const PasswordResetDialog = ({
                             </div>
                         ) : null}
                     </div>
-                    <DialogFooter className="mt-6">
+                    <DialogFooter>
                         <Button disabled={loading} onClick={onClose} variant="outline">
                             {translate("Cancel")}
                         </Button>
                         <Button disabled={loading} type="submit">
-                            {loading ? translate("Saving") : translate("Reset Password")}
+                            {loading
+                                ? translate("Saving")
+                                : translate(values.sendPasswordLink ? "Send Reset Link" : "Reset Password")}
                         </Button>
                     </DialogFooter>
                 </form>

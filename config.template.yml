@@ -375,7 +375,7 @@ identity_validation:
   ## Reset Password flow. Adjusts how the reset password flow operates.
   reset_password:
     ## Maximum allowed time before the JWT is generated and when the user uses it in the duration common syntax.
-    # jwt_lifespan: '5 minutes'
+    # jwt_lifespan: '30 minutes'
 
     ## The algorithm used for the Reset Password JWT.
     # jwt_algorithm: 'HS256'

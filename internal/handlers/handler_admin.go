@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/authelia/authelia/v4/internal/authentication"
+	"github.com/authelia/authelia/v4/internal/model"
 	"github.com/authelia/authelia/v4/internal/random"
+	"github.com/authelia/authelia/v4/internal/session"
 	"github.com/authelia/authelia/v4/internal/templates"
 	"github.com/valyala/fasthttp"
 
@@ -57,7 +59,11 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 	}
 
 	password := body.Password
-	if body.Generate {
+	if body.SendPasswordLink {
+		if !adminRequirePasswordLink(ctx) {
+			return
+		}
+
 		var err error
 
 		if password, err = adminGeneratePassword(ctx); err != nil {
@@ -70,9 +76,7 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 
 		return
-	}
-
-	if err := ctx.Providers.PasswordPolicy.Check(password); err != nil {
+	} else if err := ctx.Providers.PasswordPolicy.Check(password); err != nil {
 		ctx.GetLogger().WithError(err).Debug(messagePasswordWeak)
 		ctx.SetJSONError(messagePasswordWeak)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
@@ -101,15 +105,10 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 
 	switch {
 	case err == nil:
-		generatedPassword := ""
-		if body.Generate {
-			generatedPassword = password
-		}
-
-		if err = ctx.SetJSONBody(adminCreateUserNotify(ctx, details, body.Notify, generatedPassword)); err != nil {
+		if err = ctx.SetJSONBody(adminCreateUserNotify(ctx, details, body.Notify, body.SendPasswordLink)); err != nil {
 			ctx.Logger.WithError(err).Error(errStrRespBody)
 		}
-	case body.Generate:
+	case body.SendPasswordLink:
 		handleAdminGeneratedPasswordProviderError(ctx, err, messageUnableToCreateUser)
 	default:
 		handleAdminUserProviderError(ctx, err, messageUnableToCreateUser)
@@ -219,8 +218,12 @@ func AdminUserPasswordPUT(ctx *middlewares.AutheliaCtx) {
 		return
 	}
 
-	if body.Generate {
-		adminUserGeneratedPasswordPUT(ctx, body)
+	if body.SendPasswordLink {
+		if !adminRequirePasswordLink(ctx) {
+			return
+		}
+
+		adminUserPasswordLinkPUT(ctx)
 
 		return
 	}
@@ -239,18 +242,77 @@ func AdminUserPasswordPUT(ctx *middlewares.AutheliaCtx) {
 		return
 	}
 
-	if err := ctx.GetUserProvider().AdminResetUserPassword(adminUserPathUsername(ctx), body.Password); err != nil {
+	details, err := ctx.GetUserProvider().AdminGetUser(adminUserPathUsername(ctx))
+	if err != nil {
 		handleAdminUserProviderError(ctx, err, messageUnableToResetUserPassword)
 		return
 	}
 
-	ctx.ReplyOK()
+	store := ctx.Providers.StorageProvider
+	tx, err := store.BeginTX(ctx)
+	if err != nil {
+		ctx.Logger.WithError(err).Error("Unable to start administrator password reset transaction")
+		ctx.SetJSONError(messageUnableToResetUserPassword)
+		return
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := store.Rollback(tx); rollbackErr != nil {
+				ctx.Logger.WithError(rollbackErr).Error("Unable to roll back administrator password reset transaction")
+			}
+		}
+	}()
+
+	if err = store.RevokeIdentityVerifications(tx, details.Username, "ResetPassword", model.NewNullIP(ctx.RemoteIP())); err != nil {
+		ctx.Logger.WithError(err).Error("Unable to revoke password reset links before administrator password reset")
+		ctx.SetJSONError(messageUnableToResetUserPassword)
+		return
+	}
+
+	if err = ctx.GetUserProvider().AdminResetUserPassword(adminUserPathUsername(ctx), body.Password); err != nil {
+		handleAdminUserProviderError(ctx, err, messageUnableToResetUserPassword)
+		return
+	}
+
+	var revocationError string
+	if err = store.Commit(tx); err != nil {
+		ctx.Logger.WithError(err).Error("Unable to commit link revocation after administrator password reset")
+		revocationError = "password was changed but outstanding reset links could not be invalidated"
+	} else {
+		committed = true
+	}
+
+	response := adminResetPasswordNotify(ctx, details)
+	response.ResetLinksRevocationError = revocationError
+	if err = ctx.SetJSONBody(response); err != nil {
+		ctx.Logger.WithError(err).Error(errStrRespBody)
+	}
 }
 
-func adminUserGeneratedPasswordPUT(ctx *middlewares.AutheliaCtx, body adminResetPasswordRequestBody) {
-	username := adminUserPathUsername(ctx)
+func adminRequirePasswordLink(ctx *middlewares.AutheliaCtx) bool {
+	var message string
 
-	details, err := ctx.GetUserProvider().AdminGetUser(username)
+	switch {
+	case ctx.Configuration.AuthenticationBackend.PasswordReset.Disable:
+		message = "Password links are unavailable because self-service password reset is disabled."
+	case ctx.Configuration.AuthenticationBackend.PasswordReset.CustomURL.String() != "":
+		message = "Password links are unavailable because a custom password reset URL is configured."
+	case strings.TrimSpace(ctx.Configuration.IdentityValidation.ResetPassword.JWTSecret) == "":
+		message = "Password links are unavailable because the password reset signing secret is not configured."
+	default:
+		return true
+	}
+
+	ctx.SetJSONError(message)
+	ctx.SetStatusCode(fasthttp.StatusBadRequest)
+
+	return false
+}
+
+func adminUserPasswordLinkPUT(ctx *middlewares.AutheliaCtx) {
+	details, err := ctx.GetUserProvider().AdminGetUser(adminUserPathUsername(ctx))
 	if err != nil {
 		handleAdminUserProviderError(ctx, err, messageUnableToResetUserPassword)
 		return
@@ -264,62 +326,55 @@ func adminUserGeneratedPasswordPUT(ctx *middlewares.AutheliaCtx, body adminReset
 		return
 	}
 
-	password, err := adminGeneratePassword(ctx)
-	if err != nil {
-		adminHandleGeneratedPasswordError(ctx, err, messageUnableToResetUserPassword)
-
-		return
+	response := adminResetPasswordResponseBody{}
+	if err = middlewares.SendPasswordResetEmail(ctx, session.Identity{Username: details.Username, DisplayName: details.DisplayName, Email: details.Email}, false); err != nil {
+		ctx.Logger.Error("Error occurred sending administrator-requested password reset link")
+		response.NotificationError = adminUserNotificationDeliveryFailed
+	} else {
+		response.NotificationSent = true
 	}
 
-	if err = ctx.GetUserProvider().AdminResetUserPassword(username, password); err != nil {
-		handleAdminGeneratedPasswordProviderError(ctx, err, messageUnableToResetUserPassword)
-		return
-	}
-
-	if err = ctx.SetJSONBody(adminResetPasswordNotify(ctx, details, body.Notify, password)); err != nil {
+	if err = ctx.SetJSONBody(response); err != nil {
 		ctx.Logger.WithError(err).Error(errStrRespBody)
 	}
 }
 
-func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.UserDetailsCreate, notify *bool, generatedPassword string) (response adminCreateUserResponseBody) {
-	if generatedPassword == "" && notify != nil && !*notify {
+func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.UserDetailsCreate, notify *bool, sendPasswordLink bool) (response adminCreateUserResponseBody) {
+	if sendPasswordLink {
+		if err := middlewares.SendPasswordResetEmail(ctx, session.Identity{Username: details.Username, DisplayName: details.DisplayName, Email: details.Email}, true); err != nil {
+			ctx.Logger.Error("Error occurred sending new account password setup link")
+			response.NotificationError = adminUserNotificationDeliveryFailed
+		} else {
+			response.NotificationSent = true
+		}
+
+		return response
+	}
+
+	if notify == nil || !*notify {
 		response.NotificationReason = "notification disabled by request"
 		return response
 	}
 
-	if details.Email == "" {
-		response.NotificationReason = "user has no email address configured"
-		return response
-	}
-
-	detailValues := map[string]any{
-		"Action":   "User Created",
-		"Username": details.Username,
-		"Email":    details.Email,
-	}
-	if generatedPassword != "" {
-		detailValues["Password"] = generatedPassword
-	}
-
 	data := templates.EmailEventValues{
-		Title:       "User created successfully",
-		DisplayName: details.DisplayName,
-		RemoteIP:    ctx.RemoteIP().String(),
-		Details:     detailValues,
-		BodyPrefix:  "your",
-		BodyEvent:   "User Account Creation",
-		BodySuffix:  "was successful.",
+		Administrator: true,
+		Title:         "User created successfully",
+		DisplayName:   details.DisplayName,
+		RemoteIP:      ctx.RemoteIP().String(),
+		Details: map[string]any{
+			"Action":   "User Created",
+			"Username": details.Username,
+			"Email":    details.Email,
+		},
+		BodyPrefix: "your",
+		BodyEvent:  "User Account Creation",
+		BodySuffix: "was successful.",
 	}
 
 	address := mail.Address{Name: details.DisplayName, Address: details.Email}
 
-	if err := ctx.Providers.Notifier.Send(ctx, address, "User created successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
-		if generatedPassword == "" {
-			ctx.Logger.WithError(err).Error("Error occurred sending user creation notification email")
-		} else {
-			ctx.Logger.Error("Error occurred sending generated password notification email")
-		}
-
+	if err := ctx.SendNotification(address, "User created successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
+		ctx.Logger.WithError(err).Error("Error occurred sending user creation notification email")
 		response.NotificationError = adminUserNotificationDeliveryFailed
 		return response
 	}
@@ -329,26 +384,22 @@ func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.
 	return response
 }
 
-func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authentication.UserProviderAdminUserDetails, notify *bool, generatedPassword string) (response adminResetPasswordResponseBody) {
-	if generatedPassword == "" && notify != nil && !*notify {
-		response.NotificationReason = "notification disabled by request"
-		return response
-	}
-
+func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authentication.UserProviderAdminUserDetails) (response adminResetPasswordResponseBody) {
+	details.Email = strings.TrimSpace(details.Email)
 	if details.Email == "" {
 		response.NotificationReason = "user has no email address configured"
 		return response
 	}
 
 	data := templates.EmailEventValues{
-		Title:       "Password reset successfully",
-		DisplayName: details.DisplayName,
-		RemoteIP:    ctx.RemoteIP().String(),
+		Administrator: true,
+		Title:         "Password reset successfully",
+		DisplayName:   details.DisplayName,
+		RemoteIP:      ctx.RemoteIP().String(),
 		Details: map[string]any{
 			"Action":   "Password Reset",
 			"Username": details.Username,
 			"Email":    details.Email,
-			"Password": generatedPassword,
 		},
 		BodyPrefix: "your",
 		BodyEvent:  "Password Reset",
@@ -357,8 +408,8 @@ func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authenticati
 
 	address := mail.Address{Name: details.DisplayName, Address: details.Email}
 
-	if err := ctx.Providers.Notifier.Send(ctx, address, "Password reset successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
-		ctx.Logger.Error("Error occurred sending generated password notification email")
+	if err := ctx.SendNotification(address, "Password reset successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
+		ctx.Logger.WithError(err).Error("Error occurred sending administrator password reset notification email")
 		response.NotificationError = adminUserNotificationDeliveryFailed
 		return response
 	}
@@ -385,37 +436,59 @@ func adminGeneratePassword(ctx *middlewares.AutheliaCtx) (password string, err e
 }
 
 func adminGeneratedPasswordLengthForPolicy(ctx *middlewares.AutheliaCtx) int {
-	if policy := ctx.Configuration.PasswordPolicy.Standard; policy.Enabled && policy.MinLength > adminGeneratedPasswordLength {
-		return policy.MinLength
+	length := adminGeneratedPasswordLength
+	if policy := ctx.Configuration.PasswordPolicy.Standard; policy.Enabled {
+		if policy.MinLength > length {
+			length = policy.MinLength
+		}
+		if policy.MaxLength > 0 && length > policy.MaxLength {
+			length = policy.MaxLength
+		}
 	}
 
-	return adminGeneratedPasswordLength
+	return length
 }
 
 func adminGeneratedPassword(ctx *middlewares.AutheliaCtx, length int) (password string, err error) {
-	if length < 4 {
-		length = 4
+	policy := ctx.Configuration.PasswordPolicy.Standard
+	classes := [...]struct {
+		characters string
+		required   bool
+	}{
+		{random.CharSetAlphabeticLower, policy.RequireLowercase},
+		{random.CharSetAlphabeticUpper, policy.RequireUppercase},
+		{random.CharSetNumeric, policy.RequireNumber},
+		{random.CharSetSymbolicRFC3986Unreserved, policy.RequireSpecial},
 	}
 
-	parts := make([]string, 0, 5)
+	var value strings.Builder
+	value.Grow(length)
 
-	for _, characters := range []string{random.CharSetAlphabeticLower, random.CharSetAlphabeticUpper, random.CharSetNumeric, random.CharSetSymbolicRFC3986Unreserved} {
-		part, err := ctx.Providers.Random.StringCustomErr(1, characters)
+	for _, class := range classes {
+		if !class.required && length < len(classes) {
+			continue
+		}
+		if value.Len() == length {
+			return "", errAdminGeneratedPasswordPolicyFail
+		}
+
+		part, err := ctx.Providers.Random.StringCustomErr(1, class.characters)
 		if err != nil {
 			return "", err
 		}
 
-		parts = append(parts, part)
+		value.WriteString(part)
 	}
 
-	remainder, err := ctx.Providers.Random.StringCustomErr(length-4, adminGeneratedPasswordCharacters)
-	if err != nil {
-		return "", err
+	if value.Len() < length {
+		remainder, err := ctx.Providers.Random.StringCustomErr(length-value.Len(), adminGeneratedPasswordCharacters)
+		if err != nil {
+			return "", err
+		}
+		value.WriteString(remainder)
 	}
 
-	parts = append(parts, remainder)
-
-	return strings.Join(parts, ""), nil
+	return value.String(), nil
 }
 
 func adminHandleGeneratedPasswordError(ctx *middlewares.AutheliaCtx, err error, fallback string) {

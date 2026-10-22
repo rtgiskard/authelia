@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://www.authelia.com/schemas/v4.40/json-schema/configuration.json",
+  "$id": "https://www.authelia.com/schemas/v4.39/json-schema/configuration.json",
   "$ref": "#/$defs/Configuration",
   "$defs": {
     "AccessControl": {
@@ -327,6 +327,35 @@
       "type": "string",
       "pattern": "^(udp[46]?:\\/\\/)?([^:\\/]*(:\\d+)|[^:\\/]+(:\\d+)?)(\\/.*)?$",
       "format": "uri"
+    },
+    "Administration": {
+      "properties": {
+        "enable": {
+          "type": "boolean",
+          "title": "Enable",
+          "description": "Enables the administrator control plane API. This is disabled by default.",
+          "default": false
+        },
+        "users": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "title": "Users",
+          "description": "The users allowed to access the administrator control plane."
+        },
+        "groups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "title": "Groups",
+          "description": "The groups allowed to access the administrator control plane."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Administration represents the administrator control plane configuration."
     },
     "AuthenticationBackend": {
       "properties": {
@@ -1207,6 +1236,11 @@
           "title": "Identity Validation",
           "description": "Identity Validation Configuration."
         },
+        "administration": {
+          "$ref": "#/$defs/Administration",
+          "title": "Administration",
+          "description": "Administration Control Plane Configuration."
+        },
         "definitions": {
           "$ref": "#/$defs/Definitions",
           "title": "Definitions",
@@ -1218,6 +1252,12 @@
           "title": "The default redirection URL",
           "description": "Deprecated: Use the session cookies option with the same name instead.",
           "deprecated": true
+        },
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "title": "JSON Schema",
+          "description": "The JSON Schema which applies to this file."
         }
       },
       "additionalProperties": false,
@@ -3650,6 +3690,16 @@
           "title": "Implementation",
           "description": "The specific Authorization implementation to use for this endpoint."
         },
+        "headers": {
+          "patternProperties": {
+            ".*": {
+              "$ref": "#/$defs/ServerEndpointsAuthzHeader"
+            }
+          },
+          "type": "object",
+          "title": "Headers",
+          "description": "The specific Authorization headers to use for this endpoint."
+        },
         "authn_strategies": {
           "items": {
             "$ref": "#/$defs/ServerEndpointsAuthzAuthnStrategy"
@@ -3710,6 +3760,21 @@
       "additionalProperties": false,
       "type": "object",
       "description": "ServerEndpointsAuthzAuthnStrategy is the Authz endpoints configuration for the HTTP server."
+    },
+    "ServerEndpointsAuthzHeader": {
+      "properties": {
+        "user_attribute": {
+          "type": "string",
+          "title": "User Attribute",
+          "description": "The user attribute to use for the header."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "user_attribute"
+      ],
+      "description": "ServerEndpointsAuthzHeader is the Authz endpoint response header configuration for the HTTP server."
     },
     "ServerHeaders": {
       "properties": {

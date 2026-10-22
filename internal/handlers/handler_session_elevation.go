@@ -205,6 +205,7 @@ func UserSessionElevationPOST(ctx *middlewares.AutheliaCtx) {
 	domain, _ := ctx.GetCookieDomain()
 
 	data := templates.EmailIdentityVerificationOTCValues{
+		ExpiresAt:          otp.ExpiresAt,
 		Title:              "Confirm your identity",
 		RevocationLinkURL:  linkURL.String(),
 		RevocationLinkText: "Revoke",
@@ -217,7 +218,7 @@ func UserSessionElevationPOST(ctx *middlewares.AutheliaCtx) {
 	ctx.GetLogger().WithFields(map[string]any{"signature": signature, "id": otp.PublicID.String(), "username": identity.Username}).
 		Debug("Sending an email to user to confirm identity for session elevation")
 
-	if err = ctx.Providers.Notifier.Send(ctx, identity.Address(), data.Title, ctx.Providers.Templates.GetIdentityVerificationOTCEmailTemplate(), data); err != nil {
+	if err = ctx.SendNotification(identity.Address(), data.Title, ctx.Providers.Templates.GetIdentityVerificationOTCEmailTemplate(), data); err != nil {
 		ctx.GetLogger().WithError(err).Errorf("Error occurred creating user session elevation One-Time Code challenge for user '%s': error occurred sending the user the notification", userSession.Username)
 
 		ctx.SetStatusCode(fasthttp.StatusForbidden)

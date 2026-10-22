@@ -728,9 +728,8 @@ paths:
       description: >
         This endpoint is step 2 of 3 in the password reset process.
 
-        It validates the user session and reset token.
-
-        The same session cookie must be used for all steps in this process.
+        It validates the reset token without consuming it. The link can be reopened until it expires,
+        is revoked, or the password is successfully changed. No prior session cookie is required.
       requestBody:
         required: true
         content:
@@ -765,8 +764,8 @@ paths:
         - Password Reset
       summary: Password Reset
       description: >
-        The password reset endpoint validates the user session and changes the password.
-        The same session cookie must be used for all steps in this process.
+        This endpoint validates the reset token and password policy, changes the password,
+        and invalidates outstanding reset authorizations for the account. No prior session cookie is required.
 
         This endpoint is step 3 of 3 in the password reset process.
       requestBody:
@@ -966,6 +965,53 @@ paths:
           description: Authentication backend does not support user management
       security:
         - authelia_auth: []
+    post:
+      operationId: postAdminUser
+      tags:
+        - User Information
+      summary: Administrator User Creation
+      description: >
+        Creates a File-backed user. Requires administration to be enabled, administrator authorization,
+        and completed administrator session verification. In manual mode, password must satisfy the configured
+        password policy and notify optionally sends an account creation notification (default false).
+        In link mode, the backend creates an undisclosed random initial password satisfying the configured
+        password policy, creates the account, and sends a password reset link instead of a password.
+        Link delivery is mandatory regardless of notify. No password is returned or mailed.
+        Link mode is rejected before account creation when self-service password reset is disabled,
+        a custom password reset URL is configured, or the password reset JWT secret is missing.
+        Account creation and notification delivery have separate outcomes: a successful response means
+        the account was created even if notification_sent is false. Delivery failure does not roll back creation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.AdminCreateUserRequestBody'
+      responses:
+        "200":
+          description: Account created; inspect notification delivery separately
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.AdminPasswordNotificationResponse'
+        "400":
+          description: Invalid request, password policy violation, unavailable password reset link configuration, or account creation failure; no account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.Response.KO'
+        "403":
+          description: Forbidden
+        "404":
+          description: Administration is disabled
+        "409":
+          description: User already exists
+        "415":
+          description: Content type must be application/json
+        "501":
+          description: Authentication backend does not support user management
+      security:
+        - authelia_auth: []
   /admin/api/v1/users/{username}:
     get:
       operationId: getAdminUser
@@ -1000,6 +1046,61 @@ paths:
           description: Forbidden
         "404":
           description: User not found or administration is disabled
+        "501":
+          description: Authentication backend does not support user management
+      security:
+        - authelia_auth: []
+  /admin/api/v1/users/{username}/password:
+    put:
+      operationId: putAdminUserPassword
+      tags:
+        - User Information
+      summary: Administrator Password Reset
+      description: >
+        Requires administration to be enabled, administrator authorization, and completed administrator
+        session verification. In link mode, sends only a self-service password reset link and never changes
+        the existing password, including when delivery fails. Link mode is rejected before any mutation
+        when self-service password reset is disabled, a custom password reset URL is configured, or the
+        password reset JWT secret is missing. In manual mode, changes the password to the supplied
+        policy-compliant value and attempts exactly one mandatory safety notification; notification cannot
+        be disabled. No password is returned or mailed. A successful response records completion of the
+        requested operation separately from notification delivery. Manual resets invalidate outstanding
+        reset links, with revocation failure before mutation leaving the password unchanged. If revocation
+        cannot be committed after the password changes, reset_links_revocation_error reports that partial
+        outcome without claiming the password was unchanged. Manual password changes are not rolled back
+        on notification failure. A link must be redeemed through the normal password reset flow before
+        the user's password changes.
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.AdminResetPasswordRequestBody'
+      responses:
+        "200":
+          description: Manual password change completed or link delivery attempted; inspect notification delivery separately
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.AdminPasswordNotificationResponse'
+        "400":
+          description: Invalid request, password policy violation, missing link recipient email, unavailable password reset link configuration, or password operation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.Response.KO'
+        "403":
+          description: Forbidden
+        "404":
+          description: User not found or administration is disabled
+        "415":
+          description: Content type must be application/json
         "501":
           description: Authentication backend does not support user management
       security:
@@ -3021,8 +3122,12 @@ components:
     handlers.PasswordResetStep2RequestBody:
       required:
         - 'password'
+        - 'token'
       type: object
       properties:
+        token:
+          type: string
+          description: The unexpired token from the reset email. Opening the link does not consume it.
         password:
           type: string
           examples:
@@ -3169,6 +3274,88 @@ components:
             time, including legacy users. Returned by list, read, and update operations when known.
           examples:
             - '2026-10-12T09:01:32.320730572Z'
+    handlers.AdminCreateUserRequestBody:
+      type: object
+      required:
+        - username
+        - display_name
+        - email
+      description: >
+        Manual mode requires a nonempty policy-compliant password. Link mode ignores password and
+        creates an undisclosed policy-compliant random initial password.
+      properties:
+        username:
+          type: string
+          minLength: 1
+        display_name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          minLength: 1
+          description: Nonempty email address; required in both modes.
+        password:
+          type: string
+          writeOnly: true
+          description: Required in manual mode; ignored in link mode. Never returned or included in notifications.
+        groups:
+          type: array
+          items:
+            type: string
+        disabled:
+          type: boolean
+          default: false
+        notify:
+          type: boolean
+          default: false
+          description: Optional account creation notification in manual mode; cannot suppress link delivery in link mode.
+        send_password_link:
+          type: boolean
+          default: false
+          description: Send a self-service password reset link instead of using a supplied password.
+    handlers.AdminResetPasswordRequestBody:
+      type: object
+      description: >
+        Manual mode requires a nonempty policy-compliant password. Link mode ignores password and
+        leaves the current password unchanged. Manual resets always attempt a safety notification.
+      properties:
+        password:
+          type: string
+          writeOnly: true
+          description: Required in manual mode; ignored in link mode. Never returned or included in notifications.
+        send_password_link:
+          type: boolean
+          default: false
+          description: Send only a self-service password reset link without changing the password.
+    handlers.AdminPasswordNotificationResponse:
+      type: object
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: string
+          enum: ['OK']
+        data:
+          type: object
+          required:
+            - notification_sent
+          description: >
+            Notification delivery is independent from account creation or manual password mutation.
+            No password or reset link is disclosed in this response.
+          properties:
+            notification_sent:
+              type: boolean
+              description: Whether the requested link or safety/account notification was successfully sent.
+            notification_reason:
+              type: string
+              description: Present when notification was skipped, for example optional creation notification disabled or no recipient email configured.
+            notification_error:
+              type: string
+              description: Present when notification delivery failed. Does not undo a successful creation or manual password change.
+            reset_links_revocation_error:
+              type: string
+              description: Manual password change succeeded but invalidation of outstanding reset links could not be committed. Absent for link-only requests.
     handlers.UserInfo:
       type: object
       properties:

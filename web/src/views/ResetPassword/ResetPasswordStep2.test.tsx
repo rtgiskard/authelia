@@ -2,66 +2,43 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import type { ReactNode } from "react";
+
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 
 import { PasswordPolicyMode } from "@models/PasswordPolicy";
+import type { RateLimitedData } from "@services/Api";
 import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
+import type { PasswordResetResponse } from "@services/ResetPassword";
 import { completeResetPasswordProcess, resetPassword } from "@services/ResetPassword";
 import ResetPasswordStep2 from "@views/ResetPassword/ResetPasswordStep2";
 
 const mocks = vi.hoisted(() => ({
     createErrorNotification: vi.fn(),
-    createInfoNotification: vi.fn(),
     createSuccessNotification: vi.fn(),
+    createWarnNotification: vi.fn(),
     navigate: vi.fn(),
+    translate: (key: string) => key,
 }));
+const query = vi.hoisted(() => ({ token: "test-token" as string | undefined }));
 
-vi.mock("react-i18next", () => ({
-    useTranslation: () => ({ t: (key: string) => key }),
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: mocks.translate }) }));
+vi.mock("@contexts/NotificationsContext", () => ({ useNotifications: () => mocks }));
+vi.mock("@hooks/QueryParam", () => ({ useQueryParam: () => query.token }));
+vi.mock("react-router", async () => ({
+    ...(await vi.importActual("react-router")),
+    useNavigate: () => mocks.navigate,
 }));
+vi.mock("@layouts/MinimalLayout", () => ({ default: (props: { children: ReactNode }) => <div>{props.children}</div> }));
+vi.mock("@services/ResetPassword", () => ({ completeResetPasswordProcess: vi.fn(), resetPassword: vi.fn() }));
+vi.mock("@services/PasswordPolicyConfiguration", () => ({ getPasswordPolicyConfiguration: vi.fn() }));
+vi.mock("@components/PasswordMeter", () => ({ default: () => null }));
 
-vi.mock("@contexts/NotificationsContext", () => ({
-    useNotifications: () => ({
-        createErrorNotification: mocks.createErrorNotification,
-        createInfoNotification: mocks.createInfoNotification,
-        createSuccessNotification: mocks.createSuccessNotification,
-    }),
-}));
-
-const queryParam = vi.hoisted(() => ({ token: "test-token" as string | undefined }));
-
-vi.mock("@hooks/QueryParam", () => ({
-    useQueryParam: () => queryParam.token,
-}));
-
-vi.mock("react-router", async () => {
-    const actual = await vi.importActual("react-router");
-    return { ...actual, useNavigate: () => mocks.navigate };
-});
-
-vi.mock("@layouts/MinimalLayout", () => ({
-    default: (props: any) => <div data-testid="layout">{props.children}</div>,
-}));
-
-vi.mock("@services/ResetPassword", () => ({
-    completeResetPasswordProcess: vi.fn(),
-    resetPassword: vi.fn(),
-}));
-
-vi.mock("@services/PasswordPolicyConfiguration", () => ({
-    getPasswordPolicyConfiguration: vi.fn(),
-}));
-
-vi.mock("@components/PasswordMeter", () => ({
-    default: (props: any) => <div data-testid="password-meter" data-value={props.value} />,
-}));
-
-const completeProcessMock = vi.mocked(completeResetPasswordProcess);
-const resetPasswordMock = vi.mocked(resetPassword);
-const getPolicyMock = vi.mocked(getPasswordPolicyConfiguration);
-
-const standardPolicy = {
+const preview = vi.mocked(completeResetPasswordProcess);
+const reset = vi.mocked(resetPassword);
+const policy = vi.mocked(getPasswordPolicyConfiguration);
+const policyValue = {
     max_length: 0,
     min_length: 8,
     min_score: 0,
@@ -79,329 +56,123 @@ function renderStep() {
         </MemoryRouter>,
     );
 }
-
-function getPassword1() {
-    return screen.getByLabelText("New password") as HTMLInputElement;
+function first() {
+    return screen.getByLabelText("New password");
 }
-
-function getPassword2() {
-    return screen.getByLabelText("Repeat new password") as HTMLInputElement;
+function repeat() {
+    return screen.getByLabelText("Repeat new password");
 }
-
-function getReset() {
-    return screen.getByRole("button", { name: "Reset" });
+function submit() {
+    return screen.getByRole("button", { name: "Save new password" });
 }
-
-async function renderReady() {
+async function ready() {
     const result = renderStep();
-    await waitFor(() => expect(getReset()).not.toBeDisabled());
+    await waitFor(() => expect(submit()).not.toBeDisabled());
     return result;
+}
+function fill(password = "password123", confirmation = password) {
+    fireEvent.change(first(), { target: { value: password } });
+    fireEvent.change(repeat(), { target: { value: confirmation } });
 }
 
 beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    queryParam.token = "test-token";
-    completeProcessMock.mockResolvedValue({} as any);
-    getPolicyMock.mockResolvedValue(standardPolicy);
-    resetPasswordMock.mockResolvedValue(undefined as any);
+    query.token = "test-token";
+    preview.mockResolvedValue({ limited: false, retryAfter: 0 });
+    policy.mockResolvedValue(policyValue);
+    reset.mockResolvedValue({ limited: false, retryAfter: 0 });
 });
-
 afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
 });
 
-describe("rendering", () => {
-    it("renders the reset password form", () => {
-        renderStep();
-        expect(screen.getAllByText("New password").length).toBeGreaterThanOrEqual(1);
-        expect(screen.getByText("Reset")).toBeInTheDocument();
-        expect(screen.getByText("Cancel")).toBeInTheDocument();
-    });
-
-    it("starts disabled until the process completes", () => {
-        renderStep();
-        expect(getReset()).toBeDisabled();
-        expect(getPassword1()).toBeDisabled();
-        expect(getPassword2()).toBeDisabled();
-    });
-
-    it("enables the form once the process and policy resolve", async () => {
-        await renderReady();
-        expect(getPassword1()).not.toBeDisabled();
-        expect(getPassword2()).not.toBeDisabled();
-    });
-
-    it("shows the password meter for an enabled policy", async () => {
-        await renderReady();
-        expect(screen.getByTestId("password-meter")).toBeInTheDocument();
-    });
-
-    it("hides the password meter when the policy is disabled", async () => {
-        getPolicyMock.mockResolvedValue({ ...standardPolicy, mode: PasswordPolicyMode.Disabled });
-
-        await renderReady();
-
-        expect(screen.queryByTestId("password-meter")).not.toBeInTheDocument();
-    });
-
-    it("feeds the new password into the meter", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-
-        await waitFor(() => expect(screen.getByTestId("password-meter")).toHaveAttribute("data-value", "password123"));
-    });
+it("does not allow a password submission before the link is validated", () => {
+    preview.mockReturnValue(Promise.withResolvers<RateLimitedData<undefined>>().promise);
+    renderStep();
+    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save new password" })).not.toBeInTheDocument();
+    expect(reset).not.toHaveBeenCalled();
 });
 
-describe("process initiation", () => {
-    it("starts the process once a token becomes available", async () => {
-        queryParam.token = undefined;
-
-        const { rerender } = renderStep();
-
-        expect(completeProcessMock).not.toHaveBeenCalled();
-        await waitFor(() =>
-            expect(mocks.createErrorNotification).toHaveBeenCalledWith("No verification token provided"),
-        );
-
-        queryParam.token = "test-token";
-
-        rerender(
-            <MemoryRouter>
-                <ResetPasswordStep2 />
-            </MemoryRouter>,
-        );
-
-        await waitFor(() => expect(completeProcessMock).toHaveBeenCalledWith("test-token"));
-    });
-
-    it("does not repeat the process when re-rendered with the same token", async () => {
-        const { rerender } = renderStep();
-
-        await waitFor(() => expect(completeProcessMock).toHaveBeenCalledTimes(1));
-
-        rerender(
-            <MemoryRouter>
-                <ResetPasswordStep2 />
-            </MemoryRouter>,
-        );
-
-        await waitFor(() => expect(completeProcessMock).toHaveBeenCalledTimes(1));
-    });
-
-    it("notifies and keeps the form disabled when rate limited", async () => {
-        completeProcessMock.mockResolvedValue({ limited: true, retryAfter: 30 } as any);
-
-        renderStep();
-
-        await waitFor(() =>
-            expect(mocks.createErrorNotification).toHaveBeenCalledWith("You have made too many requests"),
-        );
-        expect(getReset()).toBeDisabled();
-        expect(getPolicyMock).not.toHaveBeenCalled();
-    });
-
-    it("notifies and keeps the form disabled when the token expired", async () => {
-        completeProcessMock.mockRejectedValue(new Error("expired"));
-
-        renderStep();
-
-        await waitFor(() =>
-            expect(mocks.createErrorNotification).toHaveBeenCalledWith(
-                "There was an issue completing the process the verification token might have expired",
-            ),
-        );
-        expect(getReset()).toBeDisabled();
-    });
-
-    it("notifies when the policy cannot be retrieved", async () => {
-        getPolicyMock.mockRejectedValue(new Error("boom"));
-
-        renderStep();
-
-        await waitFor(() =>
-            expect(mocks.createErrorNotification).toHaveBeenCalledWith(
-                "There was an issue completing the process the verification token might have expired",
-            ),
-        );
-    });
+it("lets a user retry opening the form without applying for another email", async () => {
+    preview.mockRejectedValueOnce(new Error("network unavailable"));
+    renderStep();
+    await screen.findByRole("alert");
+    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(submit()).not.toBeDisabled());
+    expect(reset).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
 });
 
-describe("validation", () => {
-    it("flags both fields when both are empty", async () => {
-        await renderReady();
-
-        fireEvent.click(getReset());
-
-        await waitFor(() => expect(getPassword1()).toHaveAttribute("aria-invalid", "true"));
-        expect(getPassword2()).toHaveAttribute("aria-invalid", "true");
-        expect(resetPasswordMock).not.toHaveBeenCalled();
-    });
-
-    it("flags only the repeat field when the first is filled", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() => expect(getPassword2()).toHaveAttribute("aria-invalid", "true"));
-        expect(getPassword1()).not.toHaveAttribute("aria-invalid", "true");
-        expect(resetPasswordMock).not.toHaveBeenCalled();
-    });
-
-    it("flags only the first field when the repeat is filled", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() => expect(getPassword1()).toHaveAttribute("aria-invalid", "true"));
-        expect(getPassword2()).not.toHaveAttribute("aria-invalid", "true");
-    });
-
-    it("rejects mismatched passwords", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "different" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() => expect(mocks.createErrorNotification).toHaveBeenCalledWith("Passwords do not match"));
-        expect(getPassword1()).toHaveAttribute("aria-invalid", "true");
-        expect(getPassword2()).toHaveAttribute("aria-invalid", "true");
-        expect(resetPasswordMock).not.toHaveBeenCalled();
-    });
+it("provides a way to request a new link when the current one is unavailable", async () => {
+    query.token = undefined;
+    renderStep();
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Request a new link" }));
+    expect(mocks.navigate).toHaveBeenCalledWith("/reset-password/step1");
+    expect(reset).not.toHaveBeenCalled();
 });
 
-describe("resetting", () => {
-    it("resets the password and navigates home after the delay", async () => {
-        vi.useFakeTimers();
-
-        renderStep();
-        await vi.waitFor(() => expect(getReset()).not.toBeDisabled());
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await vi.waitFor(() => expect(resetPasswordMock).toHaveBeenCalledWith("password123"));
-        expect(mocks.createSuccessNotification).toHaveBeenCalledWith("Password has been reset");
-        expect(mocks.navigate).not.toHaveBeenCalled();
-
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(1500);
-        });
-
-        expect(mocks.navigate).toHaveBeenCalledWith("/");
+it("does not let a stale preview enable a different invalid link", async () => {
+    const oldPreview = Promise.withResolvers<RateLimitedData<undefined>>();
+    preview.mockReturnValueOnce(oldPreview.promise);
+    const view = renderStep();
+    query.token = "another-token";
+    preview.mockRejectedValueOnce(new Error("expired"));
+    view.rerender(
+        <MemoryRouter>
+            <ResetPasswordStep2 />
+        </MemoryRouter>,
+    );
+    await screen.findByRole("alert");
+    await act(async () => {
+        oldPreview.resolve({ limited: false, retryAfter: 0 });
     });
-
-    it("resets when Enter is pressed on the repeat field", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.keyDown(getPassword2(), { key: "Enter" });
-
-        await waitFor(() => expect(resetPasswordMock).toHaveBeenCalledWith("password123"));
-    });
-
-    it("ignores keys other than Enter on the repeat field", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.keyDown(getPassword2(), { key: "a" });
-
-        expect(resetPasswordMock).not.toHaveBeenCalled();
-    });
-
-    it("re-enables the form when the reset fails", async () => {
-        resetPasswordMock.mockRejectedValue(new Error("There was an issue resetting the password"));
-
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() => expect(resetPasswordMock).toHaveBeenCalledWith("password123"));
-
-        await waitFor(() => expect(getReset()).not.toBeDisabled());
-        expect(getPassword1()).not.toBeDisabled();
-        expect(getPassword2()).not.toBeDisabled();
-        expect(mocks.createErrorNotification).toHaveBeenCalledWith("There was an issue resetting the password");
-    });
-
-    it("reports a policy violation reported as 0000052D.", async () => {
-        resetPasswordMock.mockRejectedValue(new Error("LDAP error 0000052D. rejected"));
-
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() =>
-            expect(mocks.createErrorNotification).toHaveBeenCalledWith(
-                "Your supplied password does not meet the password policy requirements",
-            ),
-        );
-    });
-
-    it("reports a policy violation reported as policy", async () => {
-        resetPasswordMock.mockRejectedValue(new Error("password does not meet policy"));
-
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() =>
-            expect(mocks.createErrorNotification).toHaveBeenCalledWith(
-                "Your supplied password does not meet the password policy requirements",
-            ),
-        );
-    });
-
-    it("clears both fields on submission", async () => {
-        await renderReady();
-
-        fireEvent.change(getPassword1(), { target: { value: "password123" } });
-        fireEvent.change(getPassword2(), { target: { value: "password123" } });
-        fireEvent.click(getReset());
-
-        await waitFor(() => expect(getPassword1()).toHaveValue(""));
-        expect(getPassword2()).toHaveValue("");
-    });
+    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+    expect(reset).not.toHaveBeenCalled();
 });
 
-describe("cancelling", () => {
-    it("navigates home", async () => {
-        await renderReady();
-
-        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-        expect(mocks.navigate).toHaveBeenCalledWith("/");
-    });
+it("preserves mismatched passwords so the user can correct them", async () => {
+    await ready();
+    fill("password123", "different123");
+    fireEvent.click(submit());
+    expect(first()).toHaveValue("password123");
+    expect(repeat()).toHaveValue("different123");
+    expect(repeat()).toHaveAttribute("aria-invalid", "true");
+    expect(reset).not.toHaveBeenCalled();
 });
 
-describe("password visibility toggle", () => {
-    it("reveals both fields on click and hides them again on a second click", async () => {
-        await renderReady();
+it("preserves fields and permits correction after server policy rejection", async () => {
+    reset.mockRejectedValueOnce(new Error("password does not meet policy"));
+    await ready();
+    fill();
+    fireEvent.click(submit());
+    await waitFor(() => expect(submit()).not.toBeDisabled());
+    expect(first()).toHaveValue("password123");
+    expect(repeat()).toHaveValue("password123");
+    expect(mocks.navigate).not.toHaveBeenCalled();
+});
 
-        const toggle = screen.getByLabelText("Toggle password visibility");
+it("does not submit the same password change twice while waiting", async () => {
+    reset.mockReturnValue(Promise.withResolvers<RateLimitedData<PasswordResetResponse>>().promise);
+    await ready();
+    fill();
+    fireEvent.submit(document.querySelector("form")!);
+    fireEvent.submit(document.querySelector("form")!);
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("reset-button")).toBeDisabled();
+});
 
-        fireEvent.click(toggle);
-        await waitFor(() => expect(getPassword1()).toHaveAttribute("type", "text"));
-        expect(getPassword2()).toHaveAttribute("type", "text");
-        expect(toggle).toHaveAttribute("aria-pressed", "true");
-
-        fireEvent.click(toggle);
-        await waitFor(() => expect(getPassword1()).toHaveAttribute("type", "password"));
-        expect(getPassword2()).toHaveAttribute("type", "password");
-        expect(toggle).toHaveAttribute("aria-pressed", "false");
-    });
+it("removes the form after success and returns only when the user is ready", async () => {
+    await ready();
+    fill();
+    fireEvent.click(submit());
+    await waitFor(() => expect(screen.queryByLabelText("New password")).not.toBeInTheDocument());
+    expect(document.querySelector("form")).not.toBeInTheDocument();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(mocks.navigate).toHaveBeenCalledWith("/");
 });

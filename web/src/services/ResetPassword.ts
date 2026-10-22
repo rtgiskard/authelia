@@ -12,7 +12,11 @@ import {
     ResetPasswordPath,
     validateStatusTooManyRequests,
 } from "@services/Api";
-import { PostWithOptionalResponse, PostWithOptionalResponseRateLimited } from "@services/Client";
+import { PostWithOptionalResponseRateLimited } from "@services/Client";
+
+export interface PasswordResetResponse {
+    reset_links_revocation_error?: string;
+}
 
 export async function initiateResetPasswordProcess(username: string) {
     return PostWithOptionalResponseRateLimited(InitiateResetPasswordPath, { username });
@@ -22,8 +26,11 @@ export async function completeResetPasswordProcess(token: string) {
     return PostWithOptionalResponseRateLimited(CompleteResetPasswordPath, { token });
 }
 
-export async function resetPassword(newPassword: string) {
-    return PostWithOptionalResponse(ResetPasswordPath, { password: newPassword });
+export async function resetPassword(token: string, newPassword: string) {
+    return PostWithOptionalResponseRateLimited<PasswordResetResponse>(ResetPasswordPath, {
+        password: newPassword,
+        token,
+    });
 }
 
 export async function deleteResetPasswordToken(token: string) {

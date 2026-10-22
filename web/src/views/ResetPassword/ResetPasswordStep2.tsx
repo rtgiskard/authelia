@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { Check, Link2Off } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
@@ -12,9 +13,9 @@ import { Button } from "@components/UI/Button";
 import { Input } from "@components/UI/Input";
 import { Label } from "@components/UI/Label";
 import { PasswordVisibilityToggle } from "@components/UI/PasswordVisibilityToggle";
-import { IndexRoute } from "@constants/Routes";
+import { Spinner } from "@components/UI/Spinner";
+import { IndexRoute, ResetPasswordStep1Route } from "@constants/Routes";
 import { IdentityToken } from "@constants/SearchParams";
-import { useNotifications } from "@contexts/NotificationsContext";
 import { usePasswordVisibility } from "@hooks/PasswordVisibility";
 import { useQueryParam } from "@hooks/QueryParam";
 import MinimalLayout from "@layouts/MinimalLayout";
@@ -22,136 +23,191 @@ import { PasswordPolicyConfiguration, PasswordPolicyMode } from "@models/Passwor
 import { getPasswordPolicyConfiguration } from "@services/PasswordPolicyConfiguration";
 import { completeResetPasswordProcess, resetPassword } from "@services/ResetPassword";
 
-const uninitiated = Symbol("uninitiated");
+type LinkStatus = "expired" | "invalid" | "limited" | "loading" | "ready" | "temporary" | "used";
 
 const ResetPasswordStep2 = function () {
     const { t: translate } = useTranslation();
-
-    const [formDisabled, setFormDisabled] = useState(true);
+    const navigate = useNavigate();
+    const processToken = useQueryParam(IdentityToken);
+    const { showPassword, toggleProps } = usePasswordVisibility();
+    const [verificationAttempt, setVerificationAttempt] = useState(0);
+    const [verification, setVerification] = useState<{ attempt: number; status: LinkStatus; token?: string }>({
+        attempt: -1,
+        status: "loading",
+    });
     const [password1, setPassword1] = useState("");
     const [password2, setPassword2] = useState("");
-    const [errorPassword1, setErrorPassword1] = useState(false);
-    const [errorPassword2, setErrorPassword2] = useState(false);
-    const { createErrorNotification, createSuccessNotification } = useNotifications();
-    const navigate = useNavigate();
-    const { showPassword, toggleProps } = usePasswordVisibility();
-
-    const [pPolicy, setPPolicy] = useState<PasswordPolicyConfiguration>({
-        max_length: 0,
-        min_length: 8,
-        min_score: 0,
-        mode: PasswordPolicyMode.Disabled,
-        require_lowercase: false,
-        require_number: false,
-        require_special: false,
-        require_uppercase: false,
-    });
-
-    // Get the token from the query param to give it back to the API when requesting
-    // the secret for OTP.
-    const processToken = useQueryParam(IdentityToken);
-
-    const resetInitiatedRef = useRef<null | string | typeof uninitiated | undefined>(uninitiated);
-
-    const handleRateLimited = useCallback(
-        (_retryAfter: number) => {
-            createErrorNotification(translate("You have made too many requests")); // TODO: Do we want to add the amount of seconds a user should retry in the message?
-        },
-        [createErrorNotification, translate],
-    );
+    const [fieldError, setFieldError] = useState<"empty" | "mismatch" | null>(null);
+    const [requestError, setRequestError] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const submittingRef = useRef(false);
+    const [completion, setCompletion] = useState<{ token: string; warning: boolean } | null>(null);
+    const [pPolicy, setPPolicy] = useState<null | PasswordPolicyConfiguration>(null);
+    const status =
+        verification.token === processToken && verification.attempt === verificationAttempt
+            ? verification.status
+            : "loading";
+    const completed = completion !== null && completion.token === processToken;
+    const formDisabled = status !== "ready" || submitting || completed;
 
     useEffect(() => {
-        if (resetInitiatedRef.current === processToken) {
-            return;
-        }
-
-        resetInitiatedRef.current = processToken;
-
-        const submitReset = async () => {
-            if (!processToken) {
-                setFormDisabled(true);
-                createErrorNotification(translate("No verification token provided"));
-                return;
-            }
-
-            try {
-                const response = await completeResetPasswordProcess(processToken);
-
-                if (response?.limited) {
-                    handleRateLimited(response.retryAfter);
-                    return;
+        let active = true;
+        const verify = async () => {
+            let nextStatus: LinkStatus = "invalid";
+            if (processToken) {
+                try {
+                    const response = await completeResetPasswordProcess(processToken);
+                    if (response?.limited) {
+                        nextStatus = "limited";
+                    } else {
+                        const policy = await getPasswordPolicyConfiguration();
+                        if (!active) return;
+                        setPPolicy(policy);
+                        nextStatus = "ready";
+                    }
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : "";
+                    nextStatus = message.includes("expired")
+                        ? "expired"
+                        : message.includes("already been used")
+                          ? "used"
+                          : message.includes("identity verification token")
+                            ? "invalid"
+                            : "temporary";
                 }
-
-                const policy = await getPasswordPolicyConfiguration();
-                setPPolicy(policy);
-                setFormDisabled(false);
-            } catch (err) {
-                console.error(err);
-                createErrorNotification(
-                    translate("There was an issue completing the process the verification token might have expired"),
-                );
-                setFormDisabled(true);
             }
+            if (active) setVerification({ attempt: verificationAttempt, status: nextStatus, token: processToken });
         };
-
-        submitReset().catch(console.error);
-    }, [processToken, createErrorNotification, translate, handleRateLimited]);
+        void verify();
+        return () => {
+            active = false;
+        };
+    }, [processToken, verificationAttempt]);
 
     const doResetPassword = async () => {
-        setPassword1("");
-        setPassword2("");
-        setErrorPassword1(false);
-        setErrorPassword2(false);
-
+        if (!processToken || formDisabled || submittingRef.current) return;
+        setRequestError("");
         if (password1 === "" || password2 === "") {
-            if (password1 === "") {
-                setErrorPassword1(true);
-            }
-            if (password2 === "") {
-                setErrorPassword2(true);
-            }
+            setFieldError("empty");
             return;
         }
-
         if (password1 !== password2) {
-            setErrorPassword1(true);
-            setErrorPassword2(true);
-            createErrorNotification(translate("Passwords do not match"));
+            setFieldError("mismatch");
             return;
         }
-
-        setFormDisabled(true);
-
+        setFieldError(null);
+        submittingRef.current = true;
+        setSubmitting(true);
         try {
-            await resetPassword(password1);
-
-            createSuccessNotification(translate("Password has been reset"));
-            setTimeout(() => navigate(IndexRoute), 1500);
-        } catch (err) {
-            console.error(err);
-            if ((err as Error).message.includes("0000052D.") || (err as Error).message.includes("policy")) {
-                createErrorNotification(
-                    translate("Your supplied password does not meet the password policy requirements"),
-                );
-            } else {
-                createErrorNotification(translate("There was an issue resetting the password"));
+            const response = await resetPassword(processToken, password1);
+            if (response?.limited) {
+                setRequestError("You have made too many requests");
+                return;
             }
-
-            setFormDisabled(false);
+            setPassword1("");
+            setPassword2("");
+            setCompletion({ token: processToken, warning: Boolean(response?.data?.reset_links_revocation_error) });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            setRequestError(
+                message.includes("0000052D.") || message.includes("policy")
+                    ? "Your supplied password does not meet the password policy requirements"
+                    : "There was an issue resetting the password",
+            );
+        } finally {
+            submittingRef.current = false;
+            setSubmitting(false);
         }
     };
 
-    const handleResetClick = () => {
-        doResetPassword().catch(console.error);
-    };
-
-    const handleCancelClick = () => navigate(IndexRoute);
+    const unavailable = status !== "loading" && status !== "ready";
+    const canRetry = status === "temporary" || status === "limited";
+    const title = completed ? "Password has been reset" : unavailable ? "Reset link unavailable" : "Enter new password";
+    const unavailableMessage =
+        status === "expired"
+            ? "This reset link has expired. Request a new link to continue."
+            : status === "used"
+              ? "This reset link has already been used. If you still need to change your password, request a new link."
+              : status === "limited"
+                ? "You have made too many requests"
+                : status === "temporary"
+                  ? "We could not check your link. Please try again."
+                  : "This reset link is invalid or no longer available. Request a new link to continue.";
 
     return (
-        <MinimalLayout title={translate("Enter new password")} id="reset-password-step2-stage">
-            <div id={"form-reset-password"}>
-                <div className="my-4 grid grid-cols-1 gap-4">
-                    <div className="w-full">
+        <MinimalLayout title={translate(title)} id="reset-password-step2-stage">
+            {completed ? (
+                <div className="space-y-6" role="status">
+                    <div className="flex size-11 items-center justify-center rounded-full bg-success/10 text-success">
+                        <Check aria-hidden="true" className="size-6" />
+                    </div>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                        {translate("Your new password is ready. Use it the next time you sign in.")}
+                    </p>
+                    {completion.warning ? (
+                        <p
+                            role="alert"
+                            className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm leading-6"
+                        >
+                            {translate(
+                                "Your password was changed, but existing reset links could not be invalidated. Contact your administrator; do not repeat the reset.",
+                            )}
+                        </p>
+                    ) : null}
+                    <Button className="w-full normal-case" onClick={() => navigate(IndexRoute)}>
+                        {translate("Back to sign in")}
+                    </Button>
+                </div>
+            ) : status === "loading" ? (
+                <div className="flex items-center gap-3 py-6 text-sm text-muted-foreground" role="status">
+                    <Spinner size={20} />
+                    <span>{translate("Checking your reset link")}</span>
+                </div>
+            ) : unavailable ? (
+                <div className="space-y-6">
+                    <div className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <Link2Off aria-hidden="true" className="size-5" />
+                    </div>
+                    <p role="alert" className="text-sm leading-6 text-muted-foreground">
+                        {translate(unavailableMessage)}
+                    </p>
+                    <div className="space-y-2">
+                        {canRetry ? (
+                            <Button
+                                className="w-full normal-case"
+                                onClick={() => setVerificationAttempt((attempt) => attempt + 1)}
+                            >
+                                {translate("Retry")}
+                            </Button>
+                        ) : null}
+                        <Button
+                            className="w-full normal-case"
+                            variant={canRetry ? "outline" : "default"}
+                            onClick={() => navigate(ResetPasswordStep1Route)}
+                        >
+                            {translate("Request a new link")}
+                        </Button>
+                        <Button className="w-full normal-case" variant="ghost" onClick={() => navigate(IndexRoute)}>
+                            {translate("Back to sign in")}
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <form
+                    id="form-reset-password"
+                    className="space-y-6"
+                    noValidate
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void doResetPassword();
+                    }}
+                >
+                    <p className="text-sm leading-6 text-muted-foreground">
+                        {translate(
+                            "Choose a new password for your account. Keep it private and do not reuse it elsewhere.",
+                        )}
+                    </p>
+                    <div className="space-y-2">
                         <Label htmlFor="password1-textfield">{translate("New password")}</Label>
                         <div className="relative">
                             <Input
@@ -159,10 +215,14 @@ const ResetPasswordStep2 = function () {
                                 type={showPassword ? "text" : "password"}
                                 value={password1}
                                 disabled={formDisabled}
-                                onChange={(e) => setPassword1(e.target.value)}
-                                error={errorPassword1}
-                                className="pr-10"
+                                onChange={(event) => setPassword1(event.target.value)}
+                                error={fieldError === "empty" && password1 === ""}
+                                aria-describedby={
+                                    fieldError === "empty" && password1 === "" ? "password-required" : undefined
+                                }
+                                className="h-12 py-3 pr-12"
                                 autoComplete="new-password"
+                                required
                             />
                             <PasswordVisibilityToggle
                                 label={translate("Toggle password visibility")}
@@ -170,55 +230,70 @@ const ResetPasswordStep2 = function () {
                                 {...toggleProps}
                             />
                         </div>
-                        {pPolicy.mode === PasswordPolicyMode.Disabled ? null : (
+                        {fieldError === "empty" && password1 === "" ? (
+                            <p id="password-required" className="text-sm text-destructive">
+                                {translate("Password is required")}
+                            </p>
+                        ) : null}
+                        {pPolicy && pPolicy.mode !== PasswordPolicyMode.Disabled ? (
                             <PasswordMeter value={password1} policy={pPolicy} />
-                        )}
+                        ) : null}
                     </div>
-                    <div className="w-full">
+                    <div className="space-y-2">
                         <Label htmlFor="password2-textfield">{translate("Repeat new password")}</Label>
                         <Input
                             id="password2-textfield"
                             type={showPassword ? "text" : "password"}
                             disabled={formDisabled}
                             value={password2}
-                            onChange={(e) => setPassword2(e.target.value)}
-                            error={errorPassword2}
-                            onKeyDown={(ev) => {
-                                if (ev.key === "Enter") {
-                                    doResetPassword().catch(console.error);
-                                    ev.preventDefault();
-                                }
+                            onChange={(event) => {
+                                setPassword2(event.target.value);
+                                if (fieldError === "mismatch") setFieldError(null);
                             }}
+                            error={fieldError === "mismatch" || (fieldError === "empty" && password2 === "")}
+                            aria-describedby={fieldError ? "password-confirmation-error" : undefined}
+                            className="h-12 py-3"
                             autoComplete="new-password"
+                            required
                         />
+                        {fieldError ? (
+                            <p id="password-confirmation-error" role="alert" className="text-sm text-destructive">
+                                {translate(
+                                    fieldError === "mismatch" ? "Passwords do not match" : "Repeat your new password",
+                                )}
+                            </p>
+                        ) : null}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="w-full">
-                            <Button
-                                id="reset-button"
-                                variant="default"
-                                name="password1"
-                                disabled={formDisabled}
-                                onClick={handleResetClick}
-                                className="w-full"
-                            >
-                                {translate("Reset")}
-                            </Button>
-                        </div>
-                        <div className="w-full">
-                            <Button
-                                id="cancel-button"
-                                variant="default"
-                                name="password2"
-                                onClick={handleCancelClick}
-                                className="w-full"
-                            >
-                                {translate("Cancel")}
-                            </Button>
-                        </div>
+                    {requestError ? (
+                        <p
+                            role="alert"
+                            className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm leading-6 text-destructive"
+                        >
+                            {translate(requestError)}
+                        </p>
+                    ) : null}
+                    <div className="space-y-2 pt-1">
+                        <Button
+                            id="reset-button"
+                            type="submit"
+                            disabled={formDisabled}
+                            className="h-11 w-full normal-case"
+                        >
+                            {submitting ? <Spinner size={18} /> : null}
+                            {translate(submitting ? "Saving" : "Save new password")}
+                        </Button>
+                        <Button
+                            id="cancel-button"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => navigate(IndexRoute)}
+                            className="w-full normal-case"
+                        >
+                            {translate("Back to sign in")}
+                        </Button>
                     </div>
-                </div>
-            </div>
+                </form>
+            )}
         </MinimalLayout>
     );
 };

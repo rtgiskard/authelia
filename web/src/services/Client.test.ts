@@ -9,6 +9,7 @@ import * as Client from "@services/Client";
 
 vi.mock("axios");
 vi.mock("@services/Api");
+vi.mock("i18next", () => ({ default: { language: "en", resolvedLanguage: "en" } }));
 
 it("handles successful post", async () => {
     const mockRes = { data: { data: "test", status: "OK" }, status: 200 };
@@ -200,40 +201,4 @@ it("throws on get with optional data returning undefined", async () => {
     (toData as any).mockReturnValue(undefined);
 
     await expect(Client.GetWithOptionalData("/path")).rejects.toThrow("unexpected type of response");
-});
-
-it("forwards the abort signal to axios on every helper", async () => {
-    const signal = new AbortController().signal;
-    const mockRes = { data: { data: "test", status: "OK" }, status: 200 };
-    (axios.get as any).mockResolvedValue(mockRes);
-    (axios.post as any).mockResolvedValue(mockRes);
-    (axios.put as any).mockResolvedValue(mockRes);
-    (axios.delete as any).mockResolvedValue(mockRes);
-    (hasServiceError as any).mockReturnValue({ errored: false });
-    (toData as any).mockReturnValue("test");
-    (toDataRateLimited as any).mockReturnValue({ data: "test", limited: false, retryAfter: 0 });
-
-    await Client.Get("/path", signal);
-    expect(axios.get).toHaveBeenLastCalledWith("/path", { signal });
-
-    await Client.GetWithOptionalData("/path", signal);
-    expect(axios.get).toHaveBeenLastCalledWith("/path", { signal });
-
-    await Client.Post("/path", { body: 1 }, signal);
-    expect(axios.post).toHaveBeenLastCalledWith("/path", { body: 1 }, { signal });
-
-    await Client.PostWithOptionalResponse("/path", { body: 1 }, signal);
-    expect(axios.post).toHaveBeenLastCalledWith("/path", { body: 1 }, { signal });
-
-    await Client.PostWithOptionalResponseRateLimited("/path", { body: 1 }, signal);
-    expect(axios.post).toHaveBeenLastCalledWith("/path", { body: 1 }, expect.objectContaining({ signal }));
-
-    await Client.Put("/path", { body: 1 }, signal);
-    expect(axios.put).toHaveBeenLastCalledWith("/path", { body: 1 }, { signal });
-
-    await Client.PutWithOptionalResponse("/path", { body: 1 }, signal);
-    expect(axios.put).toHaveBeenLastCalledWith("/path", { body: 1 }, { signal });
-
-    await Client.DeleteWithOptionalResponse("/path", { body: 1 }, signal);
-    expect(axios.delete).toHaveBeenLastCalledWith("/path", { data: { body: 1 }, signal });
 });

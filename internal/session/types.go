@@ -42,10 +42,6 @@ type UserSession struct {
 	WebAuthn *WebAuthn
 	TOTP     *TOTP
 
-	// This boolean is set to true after identity verification and checked
-	// while doing the query actually updating the password.
-	PasswordResetUsername *string
-
 	RefreshTTL time.Time
 
 	Elevations Elevations

@@ -296,7 +296,7 @@ func handlerMain(config *schema.Configuration, providers middlewares.Providers) 
 		r.POST("/api/reset-password/identity/start", middlewareAPI(rateLimitResetPasswordStart(handlers.ResetPasswordIdentityStart)))
 		r.POST("/api/reset-password/identity/finish", middlewareAPI(rateLimitResetPasswordFinish(handlers.ResetPasswordIdentityFinish)))
 
-		r.POST("/api/reset-password", middlewareAPI(handlers.ResetPasswordPOST))
+		r.POST("/api/reset-password", middlewareAPI(rateLimitResetPasswordFinish(handlers.ResetPasswordPOST)))
 		r.DELETE("/api/reset-password", middlewareAPI(rateLimitResetPasswordFinish(handlers.ResetPasswordDELETE)))
 	}
 

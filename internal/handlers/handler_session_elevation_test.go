@@ -365,6 +365,7 @@ func TestUserSessionElevationPOST(t *testing.T) {
 						}).
 						Return("abc123", nil),
 					mock.NotifierMock.EXPECT().Send(mock.Ctx, mail.Address{Name: testDisplayName, Address: "john@example.com"}, "Confirm your identity", gomock.Any(), templates.EmailIdentityVerificationOTCValues{
+						ExpiresAt:          mock.Clock.Now().Add(time.Minute),
 						Title:              "Confirm your identity",
 						RevocationLinkURL:  "https://login.example.com:8080/revoke/one-time-code?id=AQIDBAUGRyKJEBESExQVAA",
 						RevocationLinkText: "Revoke",
@@ -415,6 +416,7 @@ func TestUserSessionElevationPOST(t *testing.T) {
 						}).
 						Return("abc123", nil),
 					mock.NotifierMock.EXPECT().Send(mock.Ctx, mail.Address{Name: testDisplayName, Address: "john@example.com"}, "Confirm your identity", gomock.Any(), templates.EmailIdentityVerificationOTCValues{
+						ExpiresAt:          mock.Clock.Now().Add(time.Minute),
 						Title:              "Confirm your identity",
 						RevocationLinkURL:  "https://login.example.com:8080/revoke/one-time-code?id=AQIDBAUGRyKJEBESExQVAA",
 						RevocationLinkText: "Revoke",

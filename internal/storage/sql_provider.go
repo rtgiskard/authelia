@@ -91,6 +91,7 @@ func NewSQLProvider(config *schema.Configuration, name, driverName, dataSourceNa
 		sqlInsertIdentityVerification:  fmt.Sprintf(queryFmtInsertIdentityVerification, tableIdentityVerification),
 		sqlConsumeIdentityVerification: fmt.Sprintf(queryFmtConsumeIdentityVerification, tableIdentityVerification),
 		sqlRevokeIdentityVerification:  fmt.Sprintf(queryFmtRevokeIdentityVerification, tableIdentityVerification),
+		sqlRevokeIdentityVerifications: fmt.Sprintf(queryFmtRevokeIdentityVerifications, tableIdentityVerification),
 		sqlSelectIdentityVerification:  fmt.Sprintf(queryFmtSelectIdentityVerification, tableIdentityVerification),
 
 		sqlInsertOneTimeCode:            fmt.Sprintf(queryFmtInsertOTC, tableOneTimeCode),
@@ -258,6 +259,7 @@ type SQLProvider struct {
 	sqlInsertIdentityVerification  string
 	sqlConsumeIdentityVerification string
 	sqlRevokeIdentityVerification  string
+	sqlRevokeIdentityVerifications string
 	sqlSelectIdentityVerification  string
 
 	// Table: one_time_code.
@@ -1013,6 +1015,14 @@ func (p *SQLProvider) RevokeIdentityVerification(ctx context.Context, jti string
 	}
 
 	return checkSingleUpdateResult(result)
+}
+
+// RevokeIdentityVerifications invalidates outstanding links and already-open reset forms for this action.
+func (p *SQLProvider) RevokeIdentityVerifications(ctx context.Context, username, action string, ip model.NullIP) (err error) {
+	if _, err = p.conn(ctx).ExecContext(ctx, p.sqlRevokeIdentityVerifications, time.Now(), ip, username, action); err != nil {
+		return fmt.Errorf("error revoking identity verifications for user '%s': %w", username, err)
+	}
+	return nil
 }
 
 // FindIdentityVerification checks if an identity verification record is in the storage provider and active.

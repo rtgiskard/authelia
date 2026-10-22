@@ -3,16 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import axios from "axios";
+import i18next from "i18next";
 
 import type { RateLimitedData, ServiceResponse } from "@services/Api";
 import { hasServiceError, toData, toDataRateLimited, validateStatusTooManyRequests } from "@services/Api";
+
+function languageHeaders() {
+    return { "Accept-Language": i18next.resolvedLanguage || i18next.language || "en" };
+}
 
 export async function PutWithOptionalResponse<T = undefined>(
     path: string,
     body?: unknown,
     signal?: AbortSignal,
 ): Promise<T | undefined> {
-    const res = await axios.put<ServiceResponse<T>>(path, body, { signal });
+    const res = await axios.put<ServiceResponse<T>>(path, body, { headers: languageHeaders(), signal });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
         throw new Error(`Failed PUT to ${path}. Code: ${res.status}. Message: ${hasServiceError(res).message}`);
@@ -26,7 +31,7 @@ export async function PostWithOptionalResponse<T = undefined>(
     body?: unknown,
     signal?: AbortSignal,
 ): Promise<T | undefined> {
-    const res = await axios.post<ServiceResponse<T>>(path, body, { signal });
+    const res = await axios.post<ServiceResponse<T>>(path, body, { headers: languageHeaders(), signal });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
         throw new Error(`Failed POST to ${path}. Code: ${res.status}. Message: ${hasServiceError(res).message}`);
@@ -41,6 +46,7 @@ export async function PostWithOptionalResponseRateLimited<T = undefined>(
     signal?: AbortSignal,
 ): Promise<RateLimitedData<T> | undefined> {
     const res = await axios.post<ServiceResponse<T>>(path, body, {
+        headers: languageHeaders(),
         signal,
         validateStatus: validateStatusTooManyRequests,
     });
@@ -63,6 +69,7 @@ export async function DeleteWithOptionalResponse<T = undefined>(
 ): Promise<T | undefined> {
     const res = await axios.delete<ServiceResponse<T>>(path, {
         data: body,
+        headers: languageHeaders(),
         signal,
     });
 
@@ -78,7 +85,7 @@ export async function PatchWithOptionalResponse<T = undefined>(
     body?: unknown,
     signal?: AbortSignal,
 ): Promise<T | undefined> {
-    const res = await axios.patch<ServiceResponse<T>>(path, body, { signal });
+    const res = await axios.patch<ServiceResponse<T>>(path, body, { headers: languageHeaders(), signal });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
         throw new Error(`Failed PATCH to ${path}. Code: ${res.status}. Message: ${hasServiceError(res).message}`);
@@ -108,7 +115,7 @@ export async function Put<T>(path: string, body?: unknown, signal?: AbortSignal)
 }
 
 export async function Get<T = undefined>(path: string, signal?: AbortSignal): Promise<T> {
-    const res = await axios.get<ServiceResponse<T>>(path, { signal });
+    const res = await axios.get<ServiceResponse<T>>(path, { headers: languageHeaders(), signal });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
         throw new Error(`Failed GET from ${path}. Code: ${res.status}.`);
@@ -124,7 +131,7 @@ export async function Get<T = undefined>(path: string, signal?: AbortSignal): Pr
 }
 
 export async function GetWithOptionalData<T = undefined>(path: string, signal?: AbortSignal): Promise<null | T> {
-    const res = await axios.get<ServiceResponse<T>>(path, { signal });
+    const res = await axios.get<ServiceResponse<T>>(path, { headers: languageHeaders(), signal });
 
     if (res.status !== 200 || hasServiceError(res).errored) {
         throw new Error(`Failed GET from ${path}. Code: ${res.status}.`);

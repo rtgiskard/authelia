@@ -858,6 +858,20 @@ func (mr *MockStorageMockRecorder) RevokeIdentityVerification(ctx, jti, ip any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeIdentityVerification", reflect.TypeOf((*MockStorage)(nil).RevokeIdentityVerification), ctx, jti, ip)
 }
 
+// RevokeIdentityVerifications mocks base method.
+func (m *MockStorage) RevokeIdentityVerifications(ctx context.Context, username, action string, ip model.NullIP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeIdentityVerifications", ctx, username, action, ip)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RevokeIdentityVerifications indicates an expected call of RevokeIdentityVerifications.
+func (mr *MockStorageMockRecorder) RevokeIdentityVerifications(ctx, username, action, ip any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeIdentityVerifications", reflect.TypeOf((*MockStorage)(nil).RevokeIdentityVerifications), ctx, username, action, ip)
+}
+
 // RevokeOAuth2PushedAuthorizationSession mocks base method.
 func (m *MockStorage) RevokeOAuth2PushedAuthorizationSession(ctx context.Context, signature string) error {
 	m.ctrl.T.Helper()

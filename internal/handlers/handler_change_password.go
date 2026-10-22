@@ -143,7 +143,7 @@ func ChangePasswordPOST(ctx *middlewares.AutheliaCtx) {
 	}).
 		Debug("Sending an email to inform user that their password has changed.")
 
-	if err = ctx.Providers.Notifier.Send(ctx, addresses[0], "Password changed successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
+	if err = ctx.SendNotification(addresses[0], "Password changed successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
 		ctx.GetLogger().WithError(err).
 			WithFields(map[string]any{
 				"username": username,

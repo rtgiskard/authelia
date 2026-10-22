@@ -5,11 +5,12 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net"
-	"net/mail"
 	"net/url"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 	"github.com/authelia/authelia/v4/internal/mocks"
 	"github.com/authelia/authelia/v4/internal/model"
 	"github.com/authelia/authelia/v4/internal/session"
-	"github.com/authelia/authelia/v4/internal/templates"
+	"github.com/authelia/authelia/v4/internal/storage"
 )
 
 func TestResetPasswordDELETE(t *testing.T) {
@@ -280,242 +281,132 @@ func TestResetPasswordDELETE(t *testing.T) {
 	}
 }
 
-func TestResetPasswordPOST(t *testing.T) {
-	testCases := []struct {
-		name           string
-		setup          func(t *testing.T, mock *mocks.MockAutheliaCtx)
-		expected       string
-		expectedStatus int
-		expectedf      func(t *testing.T, mock *mocks.MockAutheliaCtx)
-	}{
-		{
-			"ShouldHandleNoIdentityVerification",
-			nil,
-			`{"status":"KO","message":"Unable to reset your password."}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred resetting the password as no identity verification process has been initiated", nil)
-			},
-		},
-		{
-			"ShouldHandleBodyParseError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-			},
-			`{"status":"KO","message":"Unable to reset your password."}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred parsing the reset password request body", "unable to parse body: unexpected end of JSON input")
-			},
-		},
-		{
-			"ShouldHandlePasswordPolicyError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
+func TestResetPasswordPOST_LinkLifecycle(t *testing.T) {
+	mock, store := newTestPasswordResetFlow(t)
+	token, verification := issueTestPasswordResetLink(t, mock, store)
+	otherToken, other := issueTestPasswordResetLink(t, mock, store)
 
-				mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{
-					Standard: schema.PasswordPolicyStandard{Enabled: true, MinLength: 8},
-				})
-
-				mock.Ctx.Request.SetBodyString(`{"password":"abc"}`)
-			},
-			`{"status":"KO","message":"Your supplied password does not meet the password policy requirements."}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred checking the new password against the password policy", "the supplied password does not met the security policy")
-			},
-		},
-		{
-			"ShouldHandleBackendComplexityError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-
-				mock.Ctx.Request.SetBodyString(`{"password":"password123"}`)
-
-				mock.UserProviderMock.
-					EXPECT().
-					UpdatePassword(testUsername, "password123").
-					Return(fmt.Errorf("LDAP Result Code 19 \"Constraint Violation\": Password fails quality checking policy"))
-			},
-			`{"status":"KO","message":"0000052D."}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred updating the user password as it does not meet the complexity requirements of the backend", "LDAP Result Code 19 \"Constraint Violation\": Password fails quality checking policy")
-			},
-		},
-		{
-			"ShouldHandleBackendUpdateError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-
-				mock.Ctx.Request.SetBodyString(`{"password":"password123"}`)
-
-				mock.UserProviderMock.
-					EXPECT().
-					UpdatePassword(testUsername, "password123").
-					Return(fmt.Errorf("failed to update"))
-			},
-			`{"status":"KO","message":"Unable to reset your password."}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred updating the user password", "failed to update")
-			},
-		},
-		{
-			"ShouldHandleUserDetailsError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-
-				mock.Ctx.Request.SetBodyString(`{"password":"password123"}`)
-
-				gomock.InOrder(
-					mock.UserProviderMock.
-						EXPECT().
-						UpdatePassword(testUsername, "password123").
-						Return(nil),
-					mock.UserProviderMock.
-						EXPECT().
-						GetDetails(testUsername).
-						Return(nil, fmt.Errorf("failed to get details")),
-				)
-			},
-			`{"status":"OK"}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred retrieving user details", "failed to get details")
-
-				us, err := mock.Ctx.GetSession()
-
-				require.NoError(t, err)
-				assert.Nil(t, us.PasswordResetUsername)
-			},
-		},
-		{
-			"ShouldHandleUserWithoutEmail",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-
-				mock.Ctx.Request.SetBodyString(`{"password":"password123"}`)
-
-				gomock.InOrder(
-					mock.UserProviderMock.
-						EXPECT().
-						UpdatePassword(testUsername, "password123").
-						Return(nil),
-					mock.UserProviderMock.
-						EXPECT().
-						GetDetails(testUsername).
-						Return(&authentication.UserDetails{Username: testUsername, DisplayName: testDisplayName}, nil),
-				)
-			},
-			`{"status":"OK"}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Error occurred retrieving user details: user has no email address configured", nil)
-			},
-		},
-		{
-			"ShouldHandleNotificationError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-
-				mock.Ctx.Request.SetBodyString(`{"password":"password123"}`)
-
-				gomock.InOrder(
-					mock.UserProviderMock.
-						EXPECT().
-						UpdatePassword(testUsername, "password123").
-						Return(nil),
-					mock.UserProviderMock.
-						EXPECT().
-						GetDetails(testUsername).
-						Return(&authentication.UserDetails{Username: testUsername, DisplayName: testDisplayName, Emails: []string{testEmail}}, nil),
-					mock.NotifierMock.
-						EXPECT().
-						Send(mock.Ctx, mail.Address{Name: testDisplayName, Address: testEmail}, "Password changed successfully", gomock.Any(), gomock.Any()).
-						Return(fmt.Errorf("failed to notify")),
-				)
-			},
-			`{"status":"OK"}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "failed to notify", nil)
-			},
-		},
-		{
-			"ShouldHandleSuccess",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				setTestPasswordResetUsername(t, mock)
-
-				mock.Ctx.Request.SetBodyString(`{"password":"password123"}`)
-
-				gomock.InOrder(
-					mock.UserProviderMock.
-						EXPECT().
-						UpdatePassword(testUsername, "password123").
-						Return(nil),
-					mock.UserProviderMock.
-						EXPECT().
-						GetDetails(testUsername).
-						Return(&authentication.UserDetails{Username: testUsername, DisplayName: testDisplayName, Emails: []string{testEmail}}, nil),
-					mock.NotifierMock.
-						EXPECT().
-						Send(mock.Ctx, mail.Address{Name: testDisplayName, Address: testEmail}, "Password changed successfully", gomock.Any(), templates.EmailEventValues{
-							Title:       "Password changed successfully",
-							DisplayName: testDisplayName,
-							RemoteIP:    "0.0.0.0",
-							Details:     map[string]any{"Action": "Password Reset"},
-							BodyPrefix:  eventEmailActionPasswordModifyPrefix,
-							BodyEvent:   eventEmailActionPasswordReset,
-							BodySuffix:  eventEmailActionPasswordModifySuffix,
-						}).
-						Return(nil),
-				)
-			},
-			``,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				us, err := mock.Ctx.GetSession()
-
-				require.NoError(t, err)
-				assert.Nil(t, us.PasswordResetUsername)
-			},
-		},
-		{
-			"ShouldHandleGetSessionError",
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				mock.Ctx.Request.Header.Set("X-Original-URL", "https://auth.notexample.com")
-			},
-			`{"status":"KO","message":"Unable to reset your password."}`,
-			fasthttp.StatusOK,
-			func(t *testing.T, mock *mocks.MockAutheliaCtx) {
-				AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), errStrUserSessionData, "unable to retrieve session cookie domain provider: no configured session cookie domain matches the url 'https://auth.notexample.com'")
-			},
-		},
+	for range 2 {
+		mock.Ctx.Response.Reset()
+		mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q}`, token))
+		ResetPasswordIdentityFinish(mock.Ctx)
+		assert.JSONEq(t, `{"status":"OK"}`, string(mock.Ctx.Response.Body()))
 	}
+	record, err := store.LoadIdentityVerification(context.Background(), verification.JTI.String())
+	require.NoError(t, err)
+	assert.False(t, record.ConsumedAt.Valid)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mock := mocks.NewMockAutheliaCtx(t)
+	mock.Ctx.Response.Reset()
+	mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q,"password":"short"}`, token))
+	ResetPasswordPOST(mock.Ctx)
+	assert.Contains(t, string(mock.Ctx.Response.Body()), `"status":"KO"`)
+	active, err := store.FindIdentityVerification(context.Background(), verification.JTI.String())
+	require.NoError(t, err)
+	assert.True(t, active, "password policy rejection must preserve the link")
 
-			defer mock.Close()
+	mock.UserProviderMock.EXPECT().UpdatePassword(testUsername, "password123").Return(nil)
+	mock.UserProviderMock.EXPECT().GetDetails(testUsername).Return(&authentication.UserDetails{Username: testUsername}, nil)
+	mock.Ctx.Response.Reset()
+	mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q,"password":"password123"}`, token))
+	ResetPasswordPOST(mock.Ctx)
+	assert.JSONEq(t, `{"status":"OK"}`, string(mock.Ctx.Response.Body()))
+	used, err := store.LoadIdentityVerification(context.Background(), verification.JTI.String())
+	require.NoError(t, err)
+	assert.True(t, used.ConsumedAt.Valid)
+	revoked, err := store.LoadIdentityVerification(context.Background(), other.JTI.String())
+	require.NoError(t, err)
+	assert.True(t, revoked.RevokedAt.Valid)
 
-			mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{})
+	for _, old := range []string{token, otherToken} {
+		mock.Ctx.Response.Reset()
+		mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q,"password":"different-password"}`, old))
+		ResetPasswordPOST(mock.Ctx)
+		assert.Contains(t, string(mock.Ctx.Response.Body()), `"status":"KO"`)
+	}
+}
 
-			if tc.setup != nil {
-				tc.setup(t, mock)
-			}
-
+func TestResetPasswordPOST_BackendRejectionPreservesLinks(t *testing.T) {
+	for _, backendErr := range []error{fmt.Errorf("LDAP Result Code 19: Password fails quality checking policy"), fmt.Errorf("backend unavailable")} {
+		t.Run(backendErr.Error(), func(t *testing.T) {
+			mock, store := newTestPasswordResetFlow(t)
+			token, verification := issueTestPasswordResetLink(t, mock, store)
+			_, other := issueTestPasswordResetLink(t, mock, store)
+			mock.UserProviderMock.EXPECT().UpdatePassword(testUsername, "password123").Return(backendErr)
+			mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q,"password":"password123"}`, token))
 			ResetPasswordPOST(mock.Ctx)
-
-			assert.Equal(t, tc.expectedStatus, mock.Ctx.Response.StatusCode())
-			assert.Equal(t, tc.expected, string(mock.Ctx.Response.Body()))
-
-			if tc.expectedf != nil {
-				tc.expectedf(t, mock)
+			assert.Contains(t, string(mock.Ctx.Response.Body()), `"status":"KO"`)
+			for _, link := range []model.IdentityVerification{verification, other} {
+				active, err := store.FindIdentityVerification(context.Background(), link.JTI.String())
+				require.NoError(t, err)
+				assert.True(t, active, "a failed password update must not consume or revoke links")
 			}
 		})
 	}
+}
+
+func TestResetPasswordPOST_RejectsInvalidAuthorization(t *testing.T) {
+	for _, mode := range []string{"missing", "expired", "revoked", "wrong-action", "wrong-signature", "missing-expiry"} {
+		t.Run(mode, func(t *testing.T) {
+			mock, store := newTestPasswordResetFlow(t)
+			token, verification := issueTestPasswordResetLink(t, mock, store)
+			issuer, err := mock.Ctx.IssuerURL()
+			require.NoError(t, err)
+			claims := verification.ToIdentityVerificationClaim(issuer)
+			secret := testJWTSecret
+			switch mode {
+			case "missing":
+				token = ""
+			case "expired":
+				claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Minute))
+			case "revoked":
+				require.NoError(t, store.RevokeIdentityVerification(context.Background(), verification.JTI.String(), model.NullIP{}))
+			case "wrong-action":
+				claims.Action = "OtherAction"
+			case "wrong-signature":
+				secret = "a-different-secret"
+			case "missing-expiry":
+				claims.ExpiresAt = nil
+			}
+			if mode != "missing" {
+				token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+				require.NoError(t, err)
+			}
+			mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q,"password":"password123"}`, token))
+			ResetPasswordPOST(mock.Ctx)
+			assert.Contains(t, string(mock.Ctx.Response.Body()), `"status":"KO"`)
+		})
+	}
+}
+
+func newTestPasswordResetFlow(t *testing.T) (*mocks.MockAutheliaCtx, *storage.SQLiteProvider) {
+	t.Helper()
+	mock := mocks.NewMockAutheliaCtx(t)
+	t.Cleanup(mock.Close)
+	mock.Ctx.RequestCtx.Init(&fasthttp.Request{}, nil, nil)
+	mock.Ctx.Request.Header.Set("X-Forwarded-Proto", "https")
+	mock.Ctx.Request.Header.Set("X-Forwarded-Host", "login.example.com:8080")
+	mock.Ctx.Configuration.IdentityValidation.ResetPassword.JWTSecret = testJWTSecret
+	mock.Ctx.Configuration.IdentityValidation.ResetPassword.JWTAlgorithm = "HS256"
+	mock.Ctx.Configuration.Storage.Local = &schema.StorageLocal{Path: filepath.Join(t.TempDir(), "reset.sqlite3")}
+	mock.Ctx.Configuration.Storage.EncryptionKey = "test-password-reset-storage-encryption-key"
+	store, err := storage.NewSQLiteProvider(&mock.Ctx.Configuration)
+	require.NoError(t, err)
+	require.NoError(t, store.StartupCheck())
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	mock.Ctx.Providers.StorageProvider = store
+	mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{Standard: schema.PasswordPolicyStandard{Enabled: true, MinLength: 8}})
+	return mock, store
+}
+
+func issueTestPasswordResetLink(t *testing.T, mock *mocks.MockAutheliaCtx, store *storage.SQLiteProvider) (string, model.IdentityVerification) {
+	t.Helper()
+	verification := model.NewIdentityVerification(uuid.New(), testUsername, ActionResetPassword, net.ParseIP("192.0.2.1"), 30*time.Minute)
+	require.NoError(t, store.SaveIdentityVerification(context.Background(), verification))
+	issuer, err := mock.Ctx.IssuerURL()
+	require.NoError(t, err)
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, verification.ToIdentityVerificationClaim(issuer)).SignedString([]byte(testJWTSecret))
+	require.NoError(t, err)
+	return token, verification
 }
 
 func TestIdentityRetrieverFromStorage(t *testing.T) {
@@ -595,38 +486,6 @@ func TestIdentityRetrieverFromStorage(t *testing.T) {
 	}
 }
 
-func TestResetPasswordIdentityVerificationFinish(t *testing.T) {
-	mock := mocks.NewMockAutheliaCtx(t)
-
-	defer mock.Close()
-
-	resetPasswordIdentityVerificationFinish(mock.Ctx, testUsername)
-
-	assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
-	assert.Equal(t, `{"status":"OK"}`, string(mock.Ctx.Response.Body()))
-
-	us, err := mock.Ctx.GetSession()
-
-	require.NoError(t, err)
-	require.NotNil(t, us.PasswordResetUsername)
-	assert.Equal(t, testUsername, *us.PasswordResetUsername)
-}
-
-func TestResetPasswordIdentityVerificationFinishShouldHandleGetSessionError(t *testing.T) {
-	mock := mocks.NewMockAutheliaCtx(t)
-
-	defer mock.Close()
-
-	mock.Ctx.Request.Header.Set("X-Original-URL", "https://auth.notexample.com")
-
-	resetPasswordIdentityVerificationFinish(mock.Ctx, testUsername)
-
-	assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
-	assert.Equal(t, `{"status":"OK"}`, string(mock.Ctx.Response.Body()))
-
-	AssertLogEntryMessageAndError(t, mock.Hook.LastEntry(), "Unable to get session to enable password reset in session for user ''", "unable to retrieve session cookie domain provider: no configured session cookie domain matches the url 'https://auth.notexample.com'")
-}
-
 func newTestIdentityVerificationClaim(t *testing.T, mock *mocks.MockAutheliaCtx, jti uuid.UUID, action string) *model.IdentityVerificationClaim {
 	t.Helper()
 
@@ -652,18 +511,4 @@ func setTestIdentityVerificationTokenBody(t *testing.T, mock *mocks.MockAuthelia
 	require.NoError(t, err)
 
 	mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":"%s"}`, signed))
-}
-
-func setTestPasswordResetUsername(t *testing.T, mock *mocks.MockAutheliaCtx) {
-	t.Helper()
-
-	us, err := mock.Ctx.GetSession()
-
-	require.NoError(t, err)
-
-	username := testUsername
-
-	us.PasswordResetUsername = &username
-
-	require.NoError(t, mock.Ctx.SaveSession(us))
 }

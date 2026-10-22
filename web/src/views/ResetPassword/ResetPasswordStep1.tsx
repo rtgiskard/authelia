@@ -2,147 +2,158 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { MailCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
-import ComponentWithTooltip from "@components/ComponentWithTooltip";
 import { Button } from "@components/UI/Button";
 import { Input } from "@components/UI/Input";
 import { Label } from "@components/UI/Label";
 import { Spinner } from "@components/UI/Spinner";
 import { IndexRoute } from "@constants/Routes";
-import { useNotifications } from "@contexts/NotificationsContext";
 import MinimalLayout from "@layouts/MinimalLayout";
 import { initiateResetPasswordProcess } from "@services/ResetPassword";
 
 const ResetPasswordStep1 = function () {
     const [username, setUsername] = useState("");
     const [error, setError] = useState(false);
+    const [requestError, setRequestError] = useState("");
     const [loading, setLoading] = useState(false);
-
+    const [sent, setSent] = useState(false);
     const [rateLimited, setRateLimited] = useState(false);
-    const timeoutRateLimitRef = useRef<null | ReturnType<typeof setTimeout>>(null);
-
-    const { createErrorNotification, createInfoNotification } = useNotifications();
+    const timeoutRateLimitRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const submittingRef = useRef(false);
     const navigate = useNavigate();
     const { t: translate } = useTranslation();
 
-    useEffect(() => {
-        return () => {
-            if (timeoutRateLimitRef.current !== null) {
-                clearTimeout(timeoutRateLimitRef.current);
-                timeoutRateLimitRef.current = null;
-            }
-        };
-    }, []);
-
-    const handleRateLimited = useCallback(
-        (retryAfter: number) => {
-            if (timeoutRateLimitRef.current) {
-                clearTimeout(timeoutRateLimitRef.current);
-            }
-
-            setRateLimited(true);
-
-            createErrorNotification(translate("You have made too many requests"));
-
-            timeoutRateLimitRef.current = setTimeout(() => {
-                setRateLimited(false);
-                timeoutRateLimitRef.current = null;
-            }, retryAfter * 1000);
+    useEffect(
+        () => () => {
+            clearTimeout(timeoutRateLimitRef.current);
         },
-        [createErrorNotification, translate],
+        [],
     );
 
-    const doInitiateResetPasswordProcess = async () => {
+    const submit = async () => {
+        if (submittingRef.current || rateLimited || sent) return;
         setError(false);
-        setLoading(true);
-
-        if (username === "") {
+        setRequestError("");
+        if (username.trim() === "") {
             setError(true);
-            setLoading(false);
-            createErrorNotification(translate("Username is required"));
             return;
         }
-
+        submittingRef.current = true;
+        setLoading(true);
         try {
-            const response = await initiateResetPasswordProcess(username);
+            const response = await initiateResetPasswordProcess(username.trim());
             if (response?.limited === false) {
-                createInfoNotification(translate("An email has been sent to your address to complete the process"));
-                navigate(IndexRoute);
+                setSent(true);
             } else if (response?.limited) {
-                handleRateLimited(response.retryAfter);
+                setRateLimited(true);
+                setRequestError("You have made too many requests");
+                clearTimeout(timeoutRateLimitRef.current);
+                timeoutRateLimitRef.current = setTimeout(() => {
+                    setRateLimited(false);
+                    setRequestError("");
+                    timeoutRateLimitRef.current = undefined;
+                }, response.retryAfter * 1000);
             } else {
-                createErrorNotification(translate("There was an issue initiating the password reset process"));
+                setRequestError("There was an issue initiating the password reset process");
             }
         } catch {
-            createErrorNotification(translate("There was an issue initiating the password reset process"));
+            setRequestError("There was an issue initiating the password reset process");
+        } finally {
+            submittingRef.current = false;
+            setLoading(false);
         }
-        setLoading(false);
-    };
-
-    const handleResetClick = () => {
-        doInitiateResetPasswordProcess();
-    };
-
-    const handleCancelClick = () => {
-        navigate(IndexRoute);
     };
 
     return (
-        <MinimalLayout title={translate("Reset password")} id="reset-password-step1-stage">
-            <div id={"form-reset-password-username"}>
-                <div className="my-4 grid grid-cols-1 gap-4">
-                    <div className="w-full">
+        <MinimalLayout
+            title={translate(sent ? "Check your email" : "Reset password")}
+            id="reset-password-step1-stage"
+        >
+            {sent ? (
+                <div className="space-y-6" role="status">
+                    <div className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <MailCheck aria-hidden="true" className="size-6" />
+                    </div>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                        {translate(
+                            "If this account has an email address, you will receive a password reset link. Check your inbox and spam folder.",
+                        )}
+                    </p>
+                    <Button className="w-full normal-case" onClick={() => navigate(IndexRoute)}>
+                        {translate("Back to sign in")}
+                    </Button>
+                </div>
+            ) : (
+                <form
+                    id="form-reset-password-username"
+                    className="space-y-6"
+                    noValidate
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void submit();
+                    }}
+                >
+                    <p className="text-sm leading-6 text-muted-foreground">
+                        {translate("Enter your username to request a password reset link.")}
+                    </p>
+                    <div className="space-y-2">
                         <Label htmlFor="username-textfield">{translate("Username")}</Label>
                         <Input
                             id="username-textfield"
+                            className="h-12 py-3"
+                            autoComplete="username"
+                            required
                             disabled={loading}
                             error={error}
+                            aria-describedby={error ? "reset-username-error" : undefined}
                             value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            onKeyDown={(ev) => {
-                                if (ev.key === "Enter") {
-                                    ev.preventDefault();
-                                    doInitiateResetPasswordProcess();
-                                }
+                            onChange={(event) => {
+                                setUsername(event.target.value);
+                                setError(false);
                             }}
                         />
+                        {error ? (
+                            <p id="reset-username-error" role="alert" className="text-sm text-destructive">
+                                {translate("Username is required")}
+                            </p>
+                        ) : null}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="w-full">
-                            <ComponentWithTooltip
-                                render={rateLimited}
-                                title={translate("You have made too many requests")}
-                            >
-                                <Button
-                                    id="reset-button"
-                                    variant="default"
-                                    disabled={loading || rateLimited}
-                                    className="w-full"
-                                    onClick={handleResetClick}
-                                >
-                                    {loading ? <Spinner size={20} className="mr-2 h-5 w-5" /> : null}
-                                    {translate("Reset")}
-                                </Button>
-                            </ComponentWithTooltip>
-                        </div>
-                        <div className="w-full">
-                            <Button
-                                id="cancel-button"
-                                variant="default"
-                                disabled={loading}
-                                className="w-full"
-                                onClick={handleCancelClick}
-                            >
-                                {translate("Cancel")}
-                            </Button>
-                        </div>
+                    {requestError ? (
+                        <p
+                            role="alert"
+                            className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm leading-6 text-destructive"
+                        >
+                            {translate(requestError)}
+                        </p>
+                    ) : null}
+                    <div className="space-y-2 pt-1">
+                        <Button
+                            id="reset-button"
+                            type="submit"
+                            disabled={loading || rateLimited}
+                            className="h-11 w-full normal-case"
+                        >
+                            {loading ? <Spinner size={18} /> : null}
+                            {translate("Send reset link")}
+                        </Button>
+                        <Button
+                            id="cancel-button"
+                            type="button"
+                            variant="ghost"
+                            disabled={loading}
+                            onClick={() => navigate(IndexRoute)}
+                            className="w-full normal-case"
+                        >
+                            {translate("Back to sign in")}
+                        </Button>
                     </div>
-                </div>
-            </div>
+                </form>
+            )}
         </MinimalLayout>
     );
 };

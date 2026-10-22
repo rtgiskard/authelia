@@ -27,12 +27,12 @@ export interface AdminUser {
 }
 
 export interface AdminCreateUserNotificationStatus {
-    message?: string;
     status: "failed" | "sent" | "skipped";
 }
 
 export interface AdminCreateUserResponse {
     notification?: AdminCreateUserNotificationStatus;
+    reset_links_revocation_failed?: boolean;
     user?: AdminUser;
 }
 
@@ -54,11 +54,11 @@ interface AdminNotificationResponseBody {
     notification_error?: string;
     notification_reason?: string;
     notification_sent: boolean;
+    reset_links_revocation_error?: string;
 }
 
 export interface AdminPasswordResetPayload {
-    generate_password?: boolean;
-    notify?: boolean;
+    send_password_link?: boolean;
     password?: string;
 }
 
@@ -73,7 +73,7 @@ export interface AdminCreateUserPayload {
     disabled: boolean;
     display_name: string;
     email: string;
-    generate_password?: boolean;
+    send_password_link?: boolean;
     groups: string[];
     notify: boolean;
     password?: string;
@@ -135,7 +135,11 @@ export function resetAdminUserPassword(username: string, payload: AdminPasswordR
         `${AdminUsersPath}/${encodeURIComponent(username)}/password`,
         payload,
         signal,
-    ).then(toAdminCreateUserResponse);
+    ).then((response) => {
+        const result = toAdminCreateUserResponse(response);
+
+        return response?.reset_links_revocation_error ? { ...result, reset_links_revocation_failed: true } : result;
+    });
 }
 
 function toAdminCreateUserResponse(
@@ -152,7 +156,6 @@ function toAdminCreateUserResponse(
     if (response.notification_error) {
         return {
             notification: {
-                message: "User saved but email notification could not be sent",
                 status: "failed",
             },
         };
@@ -161,7 +164,6 @@ function toAdminCreateUserResponse(
     if (response.notification_reason) {
         return {
             notification: {
-                message: response.notification_reason,
                 status: "skipped",
             },
         };

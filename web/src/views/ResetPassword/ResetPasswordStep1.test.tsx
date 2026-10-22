@@ -2,275 +2,109 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import type { ReactNode } from "react";
+
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import type { RateLimitedData } from "@services/Api";
+import { initiateResetPasswordProcess } from "@services/ResetPassword";
 import ResetPasswordStep1 from "@views/ResetPassword/ResetPasswordStep1";
 
-const mockNavigate = vi.fn();
-
-vi.mock("react-i18next", () => ({
-    useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock("react-router", () => ({
-    useNavigate: () => mockNavigate,
-}));
-
-vi.mock("@components/ComponentWithTooltip", () => ({
-    default: (props: any) => <div>{props.children}</div>,
-}));
-
-vi.mock("@constants/Routes", () => ({
-    IndexRoute: "/",
-}));
-
-const mockCreateError = vi.fn();
-const mockCreateInfo = vi.fn();
-
-vi.mock("@contexts/NotificationsContext", () => ({
-    useNotifications: () => ({
-        createErrorNotification: mockCreateError,
-        createInfoNotification: mockCreateInfo,
-    }),
-}));
-
-vi.mock("@layouts/MinimalLayout", () => ({
-    default: (props: any) => <div data-testid="layout">{props.children}</div>,
-}));
-
-vi.mock("@services/ResetPassword", () => ({
-    initiateResetPasswordProcess: vi.fn(),
-}));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock("react-router", () => ({ useNavigate: () => navigate }));
+vi.mock("@layouts/MinimalLayout", () => ({ default: (props: { children: ReactNode }) => <div>{props.children}</div> }));
+vi.mock("@services/ResetPassword", () => ({ initiateResetPasswordProcess: vi.fn() }));
+const initiate = vi.mocked(initiateResetPasswordProcess);
+const submit = () => fireEvent.submit(document.querySelector("form")!);
+const fill = () => fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
 
 beforeEach(() => {
-    mockNavigate.mockReset();
-    mockCreateError.mockReset();
-    mockCreateInfo.mockReset();
+    navigate.mockReset();
+    initiate.mockReset().mockResolvedValue({ limited: false, retryAfter: 0 });
 });
-
 afterEach(() => {
     vi.useRealTimers();
 });
 
-it("renders the reset password form", () => {
+it("does not send an empty account request", () => {
     render(<ResetPasswordStep1 />);
-    expect(screen.getByLabelText("Username")).toBeInTheDocument();
-    expect(screen.getByText("Reset")).toBeInTheDocument();
-    expect(screen.getByText("Cancel")).toBeInTheDocument();
+    submit();
+    expect(screen.getByLabelText("Username")).toHaveAttribute("aria-invalid", "true");
+    expect(initiate).not.toHaveBeenCalled();
 });
 
-it("shows error when username is empty", async () => {
+it("shows confirmation without exposing account existence or automatically navigating", async () => {
     render(<ResetPasswordStep1 />);
-
-    await act(async () => {
-        fireEvent.click(screen.getByText("Reset"));
-    });
-
-    expect(mockCreateError).toHaveBeenCalledWith("Username is required");
+    fill();
+    submit();
+    await waitFor(() => expect(document.querySelector("form")).not.toBeInTheDocument());
+    expect(initiate).toHaveBeenCalledWith("john");
+    expect(navigate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(navigate).toHaveBeenCalledWith("/");
 });
 
-it("navigates to index on successful reset", async () => {
-    const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-    vi.mocked(initiateResetPasswordProcess).mockResolvedValue({ limited: false, retryAfter: 0 });
-
+it("prevents duplicate requests while waiting", async () => {
+    const response = Promise.withResolvers<RateLimitedData<undefined>>();
+    initiate.mockReturnValue(response.promise);
     render(<ResetPasswordStep1 />);
-
+    fill();
+    submit();
+    submit();
+    expect(initiate).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Username")).toBeDisabled();
     await act(async () => {
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "testuser" } });
+        response.resolve({ limited: false, retryAfter: 0 });
     });
-
-    await act(async () => {
-        fireEvent.click(screen.getByText("Reset"));
-    });
-
-    expect(mockCreateInfo).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith("/");
 });
 
-it("shows rate limited error", async () => {
-    const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-    vi.mocked(initiateResetPasswordProcess).mockResolvedValue({ limited: true, retryAfter: 30 });
-
+it("retains the account and permits retry after a network failure", async () => {
+    initiate.mockRejectedValueOnce(new Error("network unavailable"));
     render(<ResetPasswordStep1 />);
-
-    await act(async () => {
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "testuser" } });
-    });
-
-    await act(async () => {
-        fireEvent.click(screen.getByText("Reset"));
-    });
-
-    expect(mockCreateError).toHaveBeenCalledWith("You have made too many requests");
+    fill();
+    submit();
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Username")).toHaveValue("john");
+    submit();
+    await waitFor(() => expect(document.querySelector("form")).not.toBeInTheDocument());
+    expect(initiate).toHaveBeenCalledTimes(2);
 });
 
-it("navigates to index when cancel is clicked", () => {
+it("does not treat a missing service response as delivery success", async () => {
+    initiate.mockResolvedValue(undefined);
     render(<ResetPasswordStep1 />);
-    fireEvent.click(screen.getByText("Cancel"));
-    expect(mockNavigate).toHaveBeenCalledWith("/");
+    fill();
+    submit();
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Username")).toHaveValue("john");
+    expect(navigate).not.toHaveBeenCalled();
 });
 
-it("shows error when service throws", async () => {
-    const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-    vi.mocked(initiateResetPasswordProcess).mockRejectedValue(new Error("network error"));
-
+it("blocks submissions until the rate limit window ends", async () => {
+    vi.useFakeTimers();
+    initiate.mockResolvedValueOnce({ limited: true, retryAfter: 30 });
     render(<ResetPasswordStep1 />);
-
+    fill();
     await act(async () => {
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "testuser" } });
+        submit();
     });
-
+    submit();
+    expect(initiate).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("reset-button")).toBeDisabled();
     await act(async () => {
-        fireEvent.click(screen.getByText("Reset"));
+        await vi.advanceTimersByTimeAsync(30000);
     });
-
-    expect(mockCreateError).toHaveBeenCalledWith("There was an issue initiating the password reset process");
+    expect(document.getElementById("reset-button")).not.toBeDisabled();
+    await act(async () => {
+        submit();
+    });
+    expect(initiate).toHaveBeenCalledTimes(2);
 });
 
-describe("rate limiting", () => {
-    it("re-enables the reset button after the retry window", async () => {
-        vi.useFakeTimers();
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        vi.mocked(initiateResetPasswordProcess).mockResolvedValue({ limited: true, retryAfter: 30 });
-
-        render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-
-        await act(async () => {
-            fireEvent.click(screen.getByText("Reset"));
-        });
-
-        expect(mockCreateError).toHaveBeenCalledWith("You have made too many requests");
-        expect(document.getElementById("reset-button")).toBeDisabled();
-
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(30000);
-        });
-
-        expect(document.getElementById("reset-button")).not.toBeDisabled();
-    });
-
-    it("replaces an in flight rate limit timer", async () => {
-        vi.useFakeTimers();
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        vi.mocked(initiateResetPasswordProcess).mockResolvedValue({ limited: true, retryAfter: 30 });
-
-        render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-
-        await act(async () => {
-            fireEvent.keyDown(screen.getByLabelText("Username"), { key: "Enter" });
-        });
-
-        expect(initiateResetPasswordProcess).toHaveBeenCalledTimes(1);
-        expect(document.getElementById("reset-button")).toBeDisabled();
-
-        // Resubmit while the first retry window is still open, so its timer is replaced rather than expired.
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(20000);
-        });
-
-        await act(async () => {
-            fireEvent.keyDown(screen.getByLabelText("Username"), { key: "Enter" });
-        });
-
-        expect(initiateResetPasswordProcess).toHaveBeenCalledTimes(2);
-
-        // Reaching the original deadline must not re-enable the button now that the timer has been replaced.
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(10000);
-        });
-
-        expect(document.getElementById("reset-button")).toBeDisabled();
-
-        // Only the replacement window re-enables it.
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(20000);
-        });
-
-        expect(document.getElementById("reset-button")).not.toBeDisabled();
-    });
-
-    it("clears the rate limit timer on unmount", async () => {
-        vi.useFakeTimers();
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        vi.mocked(initiateResetPasswordProcess).mockResolvedValue({ limited: true, retryAfter: 30 });
-
-        const { unmount } = render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-
-        await act(async () => {
-            fireEvent.click(screen.getByText("Reset"));
-        });
-
-        expect(document.getElementById("reset-button")).toBeDisabled();
-
-        const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
-
-        unmount();
-
-        expect(clearTimeoutSpy).toHaveBeenCalled();
-    });
-});
-
-describe("keyboard handling", () => {
-    it("submits on Enter", async () => {
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        vi.mocked(initiateResetPasswordProcess).mockResolvedValue({ limited: false, retryAfter: 0 });
-
-        render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-        fireEvent.keyDown(screen.getByLabelText("Username"), { key: "Enter" });
-
-        await waitFor(() => expect(initiateResetPasswordProcess).toHaveBeenCalledWith("john"));
-    });
-
-    it("ignores keys other than Enter", async () => {
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        vi.mocked(initiateResetPasswordProcess).mockReset();
-
-        render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-        fireEvent.keyDown(screen.getByLabelText("Username"), { key: "a" });
-
-        expect(initiateResetPasswordProcess).not.toHaveBeenCalled();
-    });
-});
-
-describe("responses", () => {
-    it("reports a missing response", async () => {
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        vi.mocked(initiateResetPasswordProcess).mockResolvedValue(undefined as any);
-
-        render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-        fireEvent.click(screen.getByText("Reset"));
-
-        await waitFor(() =>
-            expect(mockCreateError).toHaveBeenCalledWith("There was an issue initiating the password reset process"),
-        );
-    });
-
-    it("disables the form while loading", async () => {
-        const { initiateResetPasswordProcess } = await import("@services/ResetPassword");
-        let resolve: (value: unknown) => void = () => {};
-        vi.mocked(initiateResetPasswordProcess).mockReturnValue(new Promise((r) => (resolve = r)) as any);
-
-        render(<ResetPasswordStep1 />);
-
-        fireEvent.change(screen.getByLabelText("Username"), { target: { value: "john" } });
-        fireEvent.click(screen.getByText("Reset"));
-
-        await waitFor(() => expect(screen.getByLabelText("Username")).toBeDisabled());
-        expect(document.getElementById("cancel-button")).toBeDisabled();
-
-        resolve({ limited: false, retryAfter: 0 });
-        await waitFor(() => expect(screen.getByLabelText("Username")).not.toBeDisabled());
-    });
+it("returns without sending a reset request", () => {
+    render(<ResetPasswordStep1 />);
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(navigate).toHaveBeenCalledWith("/");
+    expect(initiate).not.toHaveBeenCalled();
 });

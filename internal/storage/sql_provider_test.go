@@ -611,7 +611,7 @@ func TestSQLProviderIdentityVerification(t *testing.T) {
 		require.EqualError(t, provider.RevokeIdentityVerification(ctx, jti.String(), model.NullIP{}), "no rows affected")
 	})
 
-	t.Run("ShouldConsumeRevokedVerification", func(t *testing.T) {
+	t.Run("ShouldNotConsumeRevokedVerification", func(t *testing.T) {
 		jti, err := uuid.NewRandom()
 		require.NoError(t, err)
 
@@ -626,7 +626,7 @@ func TestSQLProviderIdentityVerification(t *testing.T) {
 
 		require.NoError(t, provider.SaveIdentityVerification(ctx, verification))
 		require.NoError(t, provider.RevokeIdentityVerification(ctx, jti.String(), model.NullIP{}))
-		require.NoError(t, provider.ConsumeIdentityVerification(ctx, jti.String(), model.NullIP{}))
+		require.Error(t, provider.ConsumeIdentityVerification(ctx, jti.String(), model.NullIP{}))
 	})
 }
 

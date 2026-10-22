@@ -84,6 +84,13 @@ and administrator authorization, while user-management operations require both a
 selected verification. Other settings keep the global elevated-session policy; do not enable global
 `skip_second_factor` merely to use this management flow.
 
+Password setup emails contain links, never generated or manually chosen passwords. Administrator link requests leave
+the current password unchanged; creation and delivery results are reported independently. The admin API uses
+`send_password_link` instead of the removed `generate_password` field. Password-reset submissions carry the original
+`token` alongside `password`; session state no longer grants password-reset authorization. Links expire after 30 minutes
+by default, survive form reloads and unsuccessful attempts, and all outstanding account reset links are invalidated
+after a successful password reset.
+
 Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
 normalization, and elevation rate-limit feedback remain supported.
 

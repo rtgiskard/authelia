@@ -126,6 +126,8 @@ beforeEach(() => {
 });
 
 beforeEach(() => {
+    document.body.dataset.resetpassword = "true";
+    document.body.dataset.resetpasswordcustomurl = "";
     vi.spyOn(console, "error").mockImplementation(() => {});
     mockTranslate.mockReset();
     mockTranslate.mockImplementation((key) => key);
@@ -359,7 +361,7 @@ it("shows an empty state when search has no matching users", async () => {
     expect(screen.getByText("No users matched your search")).toBeInTheDocument();
 });
 
-it("creates a user with notify enabled when email is provided", async () => {
+it("creates a user with notifications disabled by default when email is provided", async () => {
     vi.mocked(createAdminUser).mockResolvedValue({
         notification: { status: "sent" },
     });
@@ -396,7 +398,7 @@ it("creates a user with notify enabled when email is provided", async () => {
             display_name: "New User",
             email: "new-user@example.com",
             groups: [],
-            notify: true,
+            notify: false,
             password: "password123",
             username: "new-user",
         });
@@ -432,7 +434,7 @@ it("requires an email address when creating a user", async () => {
     expect(createAdminUser).not.toHaveBeenCalled();
 });
 
-it("creates a user with a generated password notification payload", async () => {
+it("creates a user with a password link notification payload", async () => {
     vi.mocked(createAdminUser).mockResolvedValue({
         notification: { status: "sent" },
     });
@@ -448,17 +450,15 @@ it("creates a user with a generated password notification payload", async () => 
     const dialog = await screen.findByRole("dialog", {}, { timeout: 3000 });
 
     fireEvent.change(within(dialog).getByLabelText("Username *"), {
-        target: { value: "generated-user" },
+        target: { value: "link-user" },
     });
     fireEvent.change(within(dialog).getByLabelText("Display Name *"), {
-        target: { value: "Generated User" },
+        target: { value: "Link User" },
     });
     fireEvent.change(within(dialog).getByLabelText("Email *"), {
-        target: { value: "generated@example.com" },
+        target: { value: "link@example.com" },
     });
-    fireEvent.click(
-        within(dialog).getByRole("checkbox", { name: "Generate random password and email it to the user" }),
-    );
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Send a password setup link to the user" }));
 
     expect(within(dialog).queryByLabelText("Password *")).not.toBeInTheDocument();
 
@@ -467,12 +467,12 @@ it("creates a user with a generated password notification payload", async () => 
     await waitFor(() => {
         expect(createAdminUser).toHaveBeenCalledWith({
             disabled: false,
-            display_name: "Generated User",
-            email: "generated@example.com",
-            generate_password: true,
+            display_name: "Link User",
+            email: "link@example.com",
             groups: [],
             notify: true,
-            username: "generated-user",
+            send_password_link: true,
+            username: "link-user",
         });
     });
 });
@@ -969,7 +969,7 @@ it("sorts the full collection before pagination and returns to the first page", 
     expect(screen.queryByText("user-00")).not.toBeInTheDocument();
 });
 
-it("resets a user password with a generated password notification payload", async () => {
+it("resets a user password with a password link notification payload", async () => {
     vi.mocked(listAdminUsers).mockResolvedValue([
         {
             disabled: false,
@@ -986,19 +986,31 @@ it("resets a user password with a generated password notification payload", asyn
 
     fireEvent.click(screen.getByRole("button", { name: "Reset Password alice" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Reset Password" }, { timeout: 3000 });
+    let dialog = await screen.findByRole("dialog", { name: "Reset Password" }, { timeout: 3000 });
 
-    fireEvent.click(
-        within(dialog).getByRole("checkbox", { name: "Generate random password and email it to the user" }),
-    );
+    expect(within(dialog).getByText("alice")).toBeInTheDocument();
+    await within(dialog).findByText("alice@example.com");
+    expect(within(dialog).getByRole("radio", { name: "Set password directly" })).toBeChecked();
+    fireEvent.change(within(dialog).getByLabelText("New Password *"), { target: { value: "password123" } });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Send Reset Link" }));
+    expect(within(dialog).getByRole("radio", { name: "Send Reset Link" })).toBeChecked();
     expect(within(dialog).queryByLabelText("New Password *")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Set password directly" }));
+    expect(within(dialog).getByLabelText("New Password *")).toHaveValue("");
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Send Reset Link" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Password alice" }));
+    dialog = await screen.findByRole("dialog", { name: "Reset Password" });
+    await within(dialog).findByText("alice@example.com");
+    expect(within(dialog).getByRole("radio", { name: "Set password directly" })).toBeChecked();
+    expect(within(dialog).getByLabelText("New Password *")).toHaveValue("");
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Send Reset Link" }));
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reset Password" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send Reset Link" }));
 
     await waitFor(() => {
         expect(resetAdminUserPassword).toHaveBeenCalledWith("alice", {
-            generate_password: true,
-            notify: true,
+            send_password_link: true,
         });
     });
 });
@@ -1083,4 +1095,131 @@ it("shows delete action when supported and deletes after confirmation", async ()
     await waitFor(() => {
         expect(listAdminUsers).toHaveBeenCalledTimes(2);
     });
+});
+
+it.each(["sent", "failed", "skipped"] as const)(
+    "translates manual reset delivery status %s separately from mutation",
+    async (status) => {
+        vi.mocked(listAdminUsers).mockResolvedValue([
+            {
+                disabled: false,
+                display_name: "Alice Admin",
+                email: "alice@example.com",
+                groups: [],
+                username: "alice",
+            },
+        ]);
+        vi.mocked(resetAdminUserPassword).mockResolvedValue({ notification: { status } });
+        mockTranslate.mockImplementation((key) => `translated:${key}`);
+        render(<UserManagementView />);
+        await screen.findByText("alice");
+        fireEvent.click(screen.getByRole("button", { name: "translated:Reset Password alice" }));
+        const dialog = await screen.findByRole("dialog", { name: "translated:Reset Password" });
+        fireEvent.change(within(dialog).getByLabelText("translated:New Password *"), {
+            target: { value: "password123" },
+        });
+        fireEvent.click(within(dialog).getByRole("button", { name: "translated:Reset Password" }));
+        await waitFor(() => expect(resetAdminUserPassword).toHaveBeenCalledWith("alice", { password: "password123" }));
+        await waitFor(() =>
+            expect(mockCreateSuccessNotification).toHaveBeenCalledWith("translated:Password reset successfully"),
+        );
+        const notification =
+            status === "sent"
+                ? mockCreateSuccessNotification
+                : status === "failed"
+                  ? mockCreateWarnNotification
+                  : mockCreateInfoNotification;
+        const key =
+            status === "sent"
+                ? "Email notification sent"
+                : status === "failed"
+                  ? "Email notification could not be sent"
+                  : "Email notification was skipped";
+        expect(notification).toHaveBeenCalledWith(`translated:${key}`);
+    },
+);
+
+it("reports a changed password and translates an outstanding-link invalidation warning", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: [],
+            username: "alice",
+        },
+    ]);
+    vi.mocked(resetAdminUserPassword).mockResolvedValue({
+        notification: { status: "sent" },
+        reset_links_revocation_failed: true,
+    });
+    mockTranslate.mockImplementation((key) => `translated:${key}`);
+    render(<UserManagementView />);
+    await screen.findByText("alice");
+    fireEvent.click(screen.getByRole("button", { name: "translated:Reset Password alice" }));
+    const dialog = await screen.findByRole("dialog", { name: "translated:Reset Password" });
+    fireEvent.change(within(dialog).getByLabelText("translated:New Password *"), { target: { value: "password123" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "translated:Reset Password" }));
+    await waitFor(() =>
+        expect(mockCreateSuccessNotification).toHaveBeenCalledWith("translated:Password reset successfully"),
+    );
+    expect(mockCreateWarnNotification).toHaveBeenCalledWith(
+        "translated:Password changed, but existing reset links could not be invalidated",
+    );
+});
+
+it.each(["sent", "failed", "skipped"] as const)(
+    "reports link reset delivery %s without claiming password mutation",
+    async (status) => {
+        vi.mocked(listAdminUsers).mockResolvedValue([
+            {
+                disabled: false,
+                display_name: "Alice Admin",
+                email: "alice@example.com",
+                groups: [],
+                username: "alice",
+            },
+        ]);
+        vi.mocked(resetAdminUserPassword).mockResolvedValue({ notification: { status } });
+        render(<UserManagementView />);
+        await screen.findByText("alice");
+        fireEvent.click(screen.getByRole("button", { name: "Reset Password alice" }));
+        const dialog = await screen.findByRole("dialog", { name: "Reset Password" });
+        fireEvent.click(within(dialog).getByRole("radio", { name: "Send Reset Link" }));
+        fireEvent.click(within(dialog).getByRole("button", { name: "Send Reset Link" }));
+        await waitFor(() => expect(resetAdminUserPassword).toHaveBeenCalledWith("alice", { send_password_link: true }));
+        await waitFor(() =>
+            expect(status === "sent" ? mockCreateSuccessNotification : mockCreateWarnNotification).toHaveBeenCalledWith(
+                status === "sent"
+                    ? "Password setup link sent"
+                    : "Password setup link could not be sent. The password was not changed",
+            ),
+        );
+        expect(mockCreateSuccessNotification).not.toHaveBeenCalledWith("Password reset successfully");
+    },
+);
+
+it.each(["disabled", "custom"])("disables link mode for %s password reset configuration", async (mode) => {
+    document.body.dataset.resetpassword = mode === "disabled" ? "false" : "true";
+    document.body.dataset.resetpasswordcustomurl = mode === "custom" ? "https://reset.example.com" : "";
+    vi.mocked(listAdminUsers).mockResolvedValue([
+        {
+            disabled: false,
+            display_name: "Alice Admin",
+            email: "alice@example.com",
+            groups: [],
+            username: "alice",
+        },
+    ]);
+    render(<UserManagementView />);
+    await screen.findByText("alice");
+    fireEvent.click(screen.getByRole("button", { name: "Create User" }));
+    let dialog = await screen.findByRole("dialog");
+    expect(
+        within(dialog).queryByRole("checkbox", { name: "Send a password setup link to the user" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Password alice" }));
+    dialog = await screen.findByRole("dialog", { name: "Reset Password" });
+    expect(within(dialog).getByRole("radio", { name: "Send Reset Link" })).toBeDisabled();
 });

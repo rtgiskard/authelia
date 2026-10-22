@@ -8,6 +8,7 @@ import (
 	th "html/template"
 	"io"
 	tt "text/template"
+	"time"
 )
 
 // Templates is the struct which holds all the *[html/template.Template] and *[text/template.Template] values.
@@ -62,17 +63,21 @@ type EmailTemplate struct {
 
 // EmailEventValues are the values used for event templates.
 type EmailEventValues struct {
-	Title       string
-	BodyPrefix  string
-	BodySuffix  string
-	BodyEvent   string
-	DisplayName string
-	Details     map[string]any
-	RemoteIP    string
+	Administrator bool
+	Title         string
+	BodyPrefix    string
+	BodySuffix    string
+	BodyEvent     string
+	DisplayName   string
+	Details       map[string]any
+	RemoteIP      string
 }
 
 // EmailIdentityVerificationJWTValues are the values used for the identity verification JWT templates.
 type EmailIdentityVerificationJWTValues struct {
+	ExpiresAt          time.Time
+	NewAccount         bool
+	Administrator      bool
 	Title              string
 	DisplayName        string
 	Domain             string
@@ -85,6 +90,7 @@ type EmailIdentityVerificationJWTValues struct {
 
 // EmailIdentityVerificationOTCValues are the values used for the identity verification OTC templates.
 type EmailIdentityVerificationOTCValues struct {
+	ExpiresAt          time.Time
 	Title              string
 	DisplayName        string
 	Domain             string

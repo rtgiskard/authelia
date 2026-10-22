@@ -24,7 +24,7 @@ import (
 type MethodList = []string
 
 type configurationBody struct {
-	AdministrationEnabled bool       `json:"administration_enabled"`
+	AdministrationEnabled  bool       `json:"administration_enabled"`
 	AvailableMethods       MethodList `json:"available_methods"`
 	PasswordChangeDisabled bool       `json:"password_change_disabled"`
 	PasswordResetDisabled  bool       `json:"password_reset_disabled"`
@@ -201,7 +201,12 @@ type resetPasswordStep1RequestBody struct {
 }
 
 type resetPasswordStep2RequestBody struct {
+	Token    string `json:"token" valid:"required"`
 	Password string `json:"password"`
+}
+
+type resetPasswordResponseBody struct {
+	ResetLinksRevocationError string `json:"reset_links_revocation_error,omitempty"`
 }
 
 type bodyRequestPasswordResetDELETE struct {
@@ -216,14 +221,14 @@ type changePasswordRequestBody struct {
 
 // adminCreateUserRequestBody model of the admin create user request body.
 type adminCreateUserRequestBody struct {
-	Username    string   `json:"username" valid:"required"`
-	Password    string   `json:"password"`
-	DisplayName string   `json:"display_name" valid:"required"`
-	Email       string   `json:"email"`
-	Groups      []string `json:"groups"`
-	Disabled    bool     `json:"disabled"`
-	Notify      *bool    `json:"notify"`
-	Generate    bool     `json:"generate_password"`
+	Username         string   `json:"username" valid:"required"`
+	Password         string   `json:"password"`
+	DisplayName      string   `json:"display_name" valid:"required"`
+	Email            string   `json:"email"`
+	Groups           []string `json:"groups"`
+	Disabled         bool     `json:"disabled"`
+	Notify           *bool    `json:"notify"`
+	SendPasswordLink bool     `json:"send_password_link"`
 }
 
 type adminCreateUserResponseBody struct {
@@ -240,15 +245,15 @@ type adminUpdateUserRequestBody struct {
 }
 
 type adminResetPasswordRequestBody struct {
-	Password string `json:"password"`
-	Generate bool   `json:"generate_password"`
-	Notify   *bool  `json:"notify"`
+	Password         string `json:"password"`
+	SendPasswordLink bool   `json:"send_password_link"`
 }
 
 type adminResetPasswordResponseBody struct {
-	NotificationSent   bool   `json:"notification_sent"`
-	NotificationReason string `json:"notification_reason,omitempty"`
-	NotificationError  string `json:"notification_error,omitempty"`
+	NotificationSent          bool   `json:"notification_sent"`
+	NotificationReason        string `json:"notification_reason,omitempty"`
+	NotificationError         string `json:"notification_error,omitempty"`
+	ResetLinksRevocationError string `json:"reset_links_revocation_error,omitempty"`
 }
 
 // PasswordPolicyBody represents the response sent by the password reset step 2.
