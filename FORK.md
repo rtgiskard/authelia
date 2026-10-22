@@ -100,6 +100,10 @@ root theme state so the server's initial body configuration cannot override a us
 Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
 normalization, and elevation rate-limit feedback remain supported.
 
+Dependency maintenance keeps compatible stable Go and JavaScript updates separate from breaking library and toolchain
+migrations. Preserve TypeScript package aliases and explicit security constraints, keep coupled packages and documentation
+deployment pins aligned, and honor the npm minimum release age in `.renovaterc` before selecting newer releases.
+
 Sync verification must package upstream API documentation assets as well as portal output before starting the server.
 Compare failing tests with an untouched upstream checkout before attributing them to fork changes, and report upstream
 failures explicitly rather than treating the complete suite as passing.

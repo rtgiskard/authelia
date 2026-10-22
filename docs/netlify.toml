@@ -8,11 +8,11 @@
   command = "./tool/build"
 
 [build.environment]
-  NODE_VERSION = "24.13.1"
-  NPM_VERSION = "11.8.0"
+  NODE_VERSION = "24.22.0"
+  NPM_VERSION = "11.21.1"
   HUGO_VERSION = "0.167.0"
-  GO_VERSION = "1.26.1"
-  DART_SASS_VERSION = "1.105.1"
+  GO_VERSION = "1.26.10"
+  DART_SASS_VERSION = "1.106.0"
   PNPM_FLAGS = "--no-optional"
 
 [context.staging]
