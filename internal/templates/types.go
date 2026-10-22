@@ -40,6 +40,7 @@ type NotificationTemplates struct {
 	jwtIdentityVerification *EmailTemplate
 	otcIdentityVerification *EmailTemplate
 	event                   *EmailTemplate
+	userOnboarding          *EmailTemplate
 }
 
 // Template covers shared implementations between [text/template.Template] and [html/template.Template].
@@ -74,11 +75,24 @@ type EmailEventValues struct {
 	RemoteIP      string
 }
 
+// EmailUserOnboardingValues are the values used to welcome newly created accounts.
+type EmailUserOnboardingValues struct {
+	Language    string
+	Title       string
+	DisplayName string
+	Username    string
+	Email       string
+	LoginURL    string
+	LinkURL     string
+	LinkText    string
+	ExpiresAt   time.Time
+	Validity    string
+}
+
 // EmailIdentityVerificationJWTValues are the values used for the identity verification JWT templates.
 type EmailIdentityVerificationJWTValues struct {
 	Language           string
 	ExpiresAt          time.Time
-	NewAccount         bool
 	Administrator      bool
 	Title              string
 	DisplayName        string

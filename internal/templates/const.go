@@ -14,6 +14,7 @@ const (
 	TemplateNameEmailIdentityVerificationJWT = "IdentityVerificationJWT"
 	TemplateNameEmailIdentityVerificationOTC = "IdentityVerificationOTC"
 	TemplateNameEmailEvent                   = "Event"
+	TemplateNameEmailUserOnboarding          = "UserOnboarding"
 
 	TemplateNameOIDCAuthorizeFormPost = "AuthorizeResponseFormPost.html"
 )

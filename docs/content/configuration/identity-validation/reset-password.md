@@ -32,7 +32,7 @@ Authelia performs this process by issuing a HMAC signed JWT. The JWT is serializ
 identity_validation:
   reset_password:
     jwt_secret: ''
-    jwt_lifespan: '30 minutes'
+    jwt_lifespan: '2 hours'
     jwt_algorithm: 'HS256'
 ```
 
@@ -52,7 +52,7 @@ characters.
 
 ### jwt_lifespan
 
-{{< confkey type="string,integer" syntax="duration" default="30 minutes" required="no" >}}
+{{< confkey type="string,integer" syntax="duration" default="2 hours" required="no" >}}
 
 The lifespan of the JSON Web Token after it is generated. Opening or refreshing the reset form does not consume the
 link. Its original expiration still applies when the new password is submitted. Password-policy errors and failed

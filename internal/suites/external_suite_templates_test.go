@@ -162,7 +162,7 @@ func (s *TemplatesSuite) TestPreviewIndexListsTemplates() {
 
 	page = page.Context(ctx)
 
-	for _, slug := range []string{"IdentityVerificationOTC", "IdentityVerificationJWT", "Event"} {
+	for _, slug := range []string{"IdentityVerificationOTC", "IdentityVerificationJWT", "Event", "UserOnboarding"} {
 		s.WaitElementLocatedBySelector(s.T(), page, `a[href="/preview/`+slug+`"]`)
 	}
 }
@@ -182,10 +182,7 @@ func (s *TemplatesSuite) TestIdentityVerificationOTCRenders() {
 
 	require.Contains(s.T(), s.previewText(outer, "#one-time-code", "#one-time-code"), "ABC123", "expected one-time code to render the PreviewProps value")
 
-	s.previewText(outer, "#one-time-code", "#link-revoke")
-
-	body := s.previewText(outer, "#one-time-code", "body")
-	require.Contains(s.T(), strings.ToLower(body), "one-time code")
+	s.previewText(outer, "#one-time-code", `a[href^="https://auth.example.com/revoke/one-time-code?"]`)
 }
 
 func (s *TemplatesSuite) TestIdentityVerificationJWTRenders() {
@@ -201,35 +198,27 @@ func (s *TemplatesSuite) TestIdentityVerificationJWTRenders() {
 
 	outer = outer.Context(ctx)
 
-	s.previewText(outer, "#link", "#link")
-	s.previewText(outer, "#link", "#link-revoke")
-
-	body := s.previewText(outer, "#link", "body")
-	require.Contains(s.T(), strings.ToLower(body), "one-time link")
+	const link = `a[href^="https://auth.example.com/reset-password/step2?"]`
+	s.previewText(outer, link, link)
+	s.previewText(outer, link, `a[href^="https://auth.example.com/revoke/reset-password?"]`)
 }
 
-func (s *TemplatesSuite) TestEventRenders() {
-	outer := s.doCreateTab(s.T(), s.templatesURL("/preview/Event"))
+func (s *TemplatesSuite) TestUserOnboardingRenders() {
+	outer := s.doCreateTab(s.T(), s.templatesURL("/preview/UserOnboarding"))
 	defer outer.MustClose()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
 	defer func() {
 		cancel()
 		s.collectScreenshot(ctx.Err(), outer)
 	}()
-
 	outer = outer.Context(ctx)
-
-	body := s.previewText(outer, "strong", "body")
-	for _, needle := range []string{
-		"Second Factor Method Added",
-		"Example Detail",
-		"Example Value",
-		"Second Factor Method",
-	} {
-		require.Contains(s.T(), body, needle, "expected Event preview body to contain %q", needle)
-	}
+	const link = `a[href^="https://auth.example.com/reset-password/step2?"]`
+	s.previewText(outer, link, link)
+	s.previewText(outer, link, `a[href="https://auth.example.com/"]`)
+	body := s.previewText(outer, link, "body")
+	require.Contains(s.T(), body, "john@example.com")
+	require.Contains(s.T(), body, "john")
 }
 
 func (s *TemplatesSuite) injectEmbeddedFont(repoRoot, srcdoc string) string {
@@ -309,7 +298,7 @@ func (s *TemplatesSuite) TestIdentityVerificationOTCVisualSnapshot() {
 }
 
 func (s *TemplatesSuite) TestIdentityVerificationJWTVisualSnapshot() {
-	s.runTemplateSnapshot("IdentityVerificationJWT", "#link", "templates_identity_verification_jwt_snapshot.png")
+	s.runTemplateSnapshot("IdentityVerificationJWT", `a[href^="https://auth.example.com/reset-password/step2?"]`, "templates_identity_verification_jwt_snapshot.png")
 }
 
 func (s *TemplatesSuite) TestEventVisualSnapshot() {

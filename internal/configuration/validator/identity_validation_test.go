@@ -6,6 +6,7 @@ package validator
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,4 +51,29 @@ func TestShouldErrorOnInvalidCharLen(t *testing.T) {
 
 	assert.EqualError(t, validator.Errors()[0], "identity_validation: elevated_session: option 'characters' must be 20 or less but it's configured as 40")
 	assert.EqualError(t, validator.Warnings()[0], "access_control: no rules have been specified so the 'default_policy' of 'two_factor' is going to be applied to all requests")
+}
+
+func TestShouldApplyResetPasswordLifespanFallbackAndPreserveOverrides(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		lifespan time.Duration
+		expected time.Duration
+	}{
+		{"unset", 0, schema.DefaultIdentityValidation.ResetPassword.JWTExpiration},
+		{"negative", -time.Minute, schema.DefaultIdentityValidation.ResetPassword.JWTExpiration},
+		{"shorter override", 5 * time.Minute, 5 * time.Minute},
+		{"previous default override", 30 * time.Minute, 30 * time.Minute},
+		{"longer override", 4 * time.Hour, 4 * time.Hour},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := schema.NewStructValidator()
+			config := newDefaultConfig()
+			config.IdentityValidation.ResetPassword.JWTExpiration = tc.lifespan
+
+			ValidateIdentityValidation(&config, validator)
+
+			assert.Empty(t, validator.Errors())
+			assert.Equal(t, tc.expected, config.IdentityValidation.ResetPassword.JWTExpiration)
+		})
+	}
 }

@@ -67,14 +67,15 @@ func (ctx *AutheliaCtx) SendNotification(recipient mail.Address, subject string,
 		}
 
 		data = values
+	case templates.EmailUserOnboardingValues:
+		lang = ctx.notificationLanguage(values.Language)
+		values.Language = lang
+		values.Title = templates.NotificationText(lang, values.Title)
+		values.LinkText = templates.NotificationText(lang, values.LinkText)
+		data = values
 	case templates.EmailIdentityVerificationJWTValues:
 		lang = ctx.notificationLanguage(values.Language)
 		values.Language = lang
-		if values.NewAccount {
-			subject = "Set your password"
-			values.Title = subject
-			values.LinkText = subject
-		}
 
 		values.Title = templates.NotificationText(lang, values.Title)
 		values.LinkText = templates.NotificationText(lang, values.LinkText)

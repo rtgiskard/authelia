@@ -60,10 +60,6 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 
 	password := body.Password
 	if body.SendPasswordLink {
-		if !adminRequirePasswordLink(ctx) {
-			return
-		}
-
 		var err error
 
 		if password, err = adminGeneratePassword(ctx); err != nil {
@@ -327,7 +323,7 @@ func adminUserPasswordLinkPUT(ctx *middlewares.AutheliaCtx) {
 	}
 
 	response := adminResetPasswordResponseBody{}
-	if err = middlewares.SendPasswordResetEmail(ctx, session.Identity{Username: details.Username, DisplayName: details.DisplayName, Email: details.Email}, false); err != nil {
+	if err = middlewares.SendPasswordResetEmail(ctx, session.Identity{Username: details.Username, DisplayName: details.DisplayName, Email: details.Email}); err != nil {
 		ctx.Logger.Error("Error occurred sending administrator-requested password reset link")
 		response.NotificationError = adminUserNotificationDeliveryFailed
 	} else {
@@ -340,47 +336,17 @@ func adminUserPasswordLinkPUT(ctx *middlewares.AutheliaCtx) {
 }
 
 func adminCreateUserNotify(ctx *middlewares.AutheliaCtx, details authentication.UserDetailsCreate, notify *bool, sendPasswordLink bool) (response adminCreateUserResponseBody) {
-	if sendPasswordLink {
-		if err := middlewares.SendPasswordResetEmail(ctx, session.Identity{Username: details.Username, DisplayName: details.DisplayName, Email: details.Email}, true); err != nil {
-			ctx.Logger.Error("Error occurred sending new account password setup link")
-			response.NotificationError = adminUserNotificationDeliveryFailed
-		} else {
-			response.NotificationSent = true
-		}
-
-		return response
-	}
-
-	if notify == nil || !*notify {
+	if !sendPasswordLink && (notify == nil || !*notify) {
 		response.NotificationReason = "notification disabled by request"
 		return response
 	}
 
-	data := templates.EmailEventValues{
-		Language:      templates.NotificationLanguage(ctx.Configuration.Notifier.DefaultLanguage),
-		Administrator: true,
-		Title:         "User created successfully",
-		DisplayName:   details.DisplayName,
-		RemoteIP:      ctx.RemoteIP().String(),
-		Details: map[string]any{
-			"Action":   "User Created",
-			"Username": details.Username,
-			"Email":    details.Email,
-		},
-		BodyPrefix: "your",
-		BodyEvent:  "User Account Creation",
-		BodySuffix: "was successful.",
-	}
-
-	address := mail.Address{Name: details.DisplayName, Address: details.Email}
-
-	if err := ctx.SendNotification(address, "User created successfully", ctx.Providers.Templates.GetEventEmailTemplate(), data); err != nil {
-		ctx.Logger.WithError(err).Error("Error occurred sending user creation notification email")
+	if err := middlewares.SendUserOnboardingEmail(ctx, session.Identity{Username: details.Username, DisplayName: details.DisplayName, Email: details.Email}); err != nil {
+		ctx.Logger.Error("Error occurred sending new account onboarding email")
 		response.NotificationError = adminUserNotificationDeliveryFailed
-		return response
+	} else {
+		response.NotificationSent = true
 	}
-
-	response.NotificationSent = true
 
 	return response
 }

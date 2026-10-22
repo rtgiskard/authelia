@@ -5,7 +5,6 @@
 package middlewares_test
 
 import (
-	"fmt"
 	"net/mail"
 	"testing"
 
@@ -39,42 +38,6 @@ func TestNotificationLanguage(t *testing.T) {
 			mock.Ctx.Configuration.Notifier.DefaultLanguage = tc.fallback
 			mock.Ctx.Request.Header.Set("Accept-Language", tc.header)
 			assert.Equal(t, tc.expected, mock.Ctx.NotificationLanguage())
-		})
-	}
-}
-
-func TestSendNotificationInvitation(t *testing.T) {
-	for _, tc := range []struct {
-		language, expectedSubject, expectedRevoke string
-	}{
-		{"en", "Set your password", "Revoke"},
-		{"zh-CN", "设置密码", "撤销"},
-		{"fr", "Set your password", "Revoke"},
-	} {
-		t.Run(tc.language, func(t *testing.T) {
-			mock := mocks.NewMockAutheliaCtx(t)
-			defer mock.Close()
-
-			mock.Ctx.Request.Header.Set("Accept-Language", "zh-CN")
-			recipient := mail.Address{Address: "john@example.com"}
-			expectedErr := fmt.Errorf("delivery failed")
-
-			mock.NotifierMock.EXPECT().Send(mock.Ctx, recipient, tc.expectedSubject, gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ any, _ mail.Address, _ string, _ *templates.EmailTemplate, data any) error {
-					values := data.(templates.EmailIdentityVerificationJWTValues)
-					assert.Equal(t, templates.NotificationLanguage(tc.language), values.Language)
-					assert.Equal(t, tc.expectedSubject, values.Title)
-					assert.Equal(t, tc.expectedSubject, values.LinkText)
-					assert.Equal(t, tc.expectedRevoke, values.RevocationLinkText)
-					assert.True(t, values.NewAccount)
-					assert.True(t, values.Administrator)
-					return expectedErr
-				})
-
-			err := mock.Ctx.SendNotification(recipient, "Reset your password", nil, templates.EmailIdentityVerificationJWTValues{
-				Language: tc.language, Title: "Reset your password", LinkText: "Validate", RevocationLinkText: "Revoke", NewAccount: true, Administrator: true,
-			})
-			assert.ErrorIs(t, err, expectedErr)
 		})
 	}
 }

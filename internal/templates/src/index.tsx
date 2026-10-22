@@ -9,6 +9,7 @@ import * as fs from "node:fs";
 import Event from "./emails/Event";
 import IdentityVerificationJWT from "./emails/IdentityVerificationJWT";
 import IdentityVerificationOTC from "./emails/IdentityVerificationOTC";
+import UserOnboarding from "./emails/UserOnboarding";
 
 const optsHTML = { pretty: false, plainText: false } as const;
 const optsTXT = {
@@ -69,11 +70,11 @@ async function doRender() {
 
     const propsJWT = {
         ...common,
-        body: `{{ if .NewAccount }}${translated("An administrator has invited you to set a password for your new account.")}{{ else if .Administrator }}${translated("An administrator has requested a password reset for your account.")}{{ else }}${translated("Use this link to reset your password.")}{{ end }}`,
+        body: `{{ if .Administrator }}${translated("An administrator has requested a password reset for your account.")}{{ else }}${translated("Use this link to reset your password.")}{{ end }}`,
         accountLabel: translated("Account"),
         domain: "{{ .Domain }}",
         expires,
-        ignore: `{{ if .NewAccount }}${translated("If you were not expecting this invitation, you can ignore this email or contact your administrator.")}{{ else if .Administrator }}${translated("If you were not expecting this reset, you can ignore this email or contact your administrator. Your password has not changed.")}{{ else }}${translated("If you did not request this, you can ignore this email. Your password has not changed.")}{{ end }}`,
+        ignore: `{{ if .Administrator }}${translated("If you were not expecting this reset, you can ignore this email or contact your administrator. Your password has not changed.")}{{ else }}${translated("If you did not request this, you can ignore this email. Your password has not changed.")}{{ end }}`,
         privacy: translated("Do not forward this email or share this link."),
         link: "{{ .LinkURL }}",
         linkText: "{{ .LinkText }}",
@@ -95,6 +96,45 @@ async function doRender() {
     fs.writeFileSync(
         "../../../examples/templates/notifications/no-preview/IdentityVerificationJWT.html",
         await renderTemplate(<IdentityVerificationJWT {...propsJWT} hidePreview />, optsHTML),
+    );
+
+    const propsOnboarding = {
+        ...common,
+        body: translated(
+            "Welcome! An administrator has created an account for you. Please set your password to get started.",
+        ),
+        usernameLabel: translated("Username"),
+        username: "{{ .Username }}",
+        emailLabel: translated("Email"),
+        email: "{{ .Email }}",
+        validity: `${translated("Valid for")}: {{ .Validity }}`,
+        expires,
+        link: "{{ .LinkURL }}",
+        linkText: "{{ .LinkText }}",
+        nextSteps: translated(
+            "After setting your password, open the sign-in page below and sign in with your username and new password.",
+        ),
+        loginLabel: translated("Sign-in page"),
+        loginURL: "{{ .LoginURL }}",
+        expired: translated("If this link has expired, contact your administrator to send a new one."),
+        ignore: translated(
+            "If you were not expecting this invitation, you can ignore this email or contact your administrator.",
+        ),
+        privacy: translated("Do not forward this email or share this link."),
+        fallbackLinkText: translated("If the button does not work, open this link in your browser:"),
+    };
+
+    fs.writeFileSync(
+        "../embed/notification/UserOnboarding.html",
+        await renderTemplate(<UserOnboarding {...propsOnboarding} />, optsHTML),
+    );
+    fs.writeFileSync(
+        "../embed/notification/UserOnboarding.txt",
+        await renderTemplate(<UserOnboarding {...propsOnboarding} isPlainText />, optsTXT),
+    );
+    fs.writeFileSync(
+        "../../../examples/templates/notifications/no-preview/UserOnboarding.html",
+        await renderTemplate(<UserOnboarding {...propsOnboarding} hidePreview />, optsHTML),
     );
 
     const propsOTC = {

@@ -5,10 +5,15 @@
 package templates
 
 import (
+	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +36,7 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, provider.GetEventEmailTemplate())
 	assert.NotNil(t, provider.GetIdentityVerificationJWTEmailTemplate())
 	assert.NotNil(t, provider.GetIdentityVerificationOTCEmailTemplate())
+	assert.NotNil(t, provider.GetUserOnboardingEmailTemplate())
 	assert.NotNil(t, provider.GetOpenIDConnectAuthorizeResponseFormPostTemplate())
 }
 
@@ -127,6 +133,51 @@ func TestLoadTemplatedAssets(t *testing.T) {
 			} else {
 				assert.EqualError(t, err, tc.err)
 			}
+		})
+	}
+}
+
+func TestUserOnboardingTemplateOverridesAndFallback(t *testing.T) {
+	values := EmailUserOnboardingValues{
+		Language: "en", Title: "Your account has been created", DisplayName: "John <script>",
+		Username: "john", Email: "john@example.com", LoginURL: "https://auth.example.com:8443/base/",
+		LinkURL: "https://auth.example.com:8443/base/reset-password/step2?token=example", LinkText: "Set your password",
+		ExpiresAt: time.Date(2026, time.October, 22, 12, 30, 0, 0, time.UTC), Validity: "1 hour 30 minutes",
+	}
+	const override = `Custom onboarding {{ .Title }} {{ .DisplayName }} {{ .Username }} {{ .Email }} {{ .LoginURL }} {{ .LinkURL }} {{ .LinkText }} {{ .Validity }} {{ .ExpiresAt.UTC.Format "2006-01-02 15:04:05 UTC" }}`
+	for _, extensions := range [][]string{nil, {".html"}, {".txt"}, {".html", ".txt"}} {
+		t.Run(fmt.Sprint(extensions), func(t *testing.T) {
+			dir := t.TempDir()
+			for _, ext := range extensions {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "UserOnboarding"+ext), []byte(override), 0600))
+			}
+			provider, err := New(Config{EmailTemplatesPath: dir})
+			require.NoError(t, err)
+			var html, text bytes.Buffer
+			require.NoError(t, provider.GetUserOnboardingEmailTemplate().HTML.Execute(&html, values))
+			require.NoError(t, provider.GetUserOnboardingEmailTemplate().Text.Execute(&text, values))
+			for _, rendered := range []string{html.String(), text.String()} {
+				for _, value := range []string{values.Title, values.Username, values.Email, values.LoginURL, values.LinkURL, values.LinkText, values.Validity, "2026-10-22 12:30:00 UTC"} {
+					assert.Contains(t, rendered, value)
+				}
+			}
+			assert.Contains(t, html.String(), "John &lt;script&gt;")
+			assert.NotContains(t, html.String(), "John <script>")
+			assert.Contains(t, text.String(), values.DisplayName)
+			assert.Equal(t, slices.Contains(extensions, ".html"), strings.Contains(html.String(), "Custom onboarding"))
+			assert.Equal(t, slices.Contains(extensions, ".txt"), strings.Contains(text.String(), "Custom onboarding"))
+		})
+	}
+}
+
+func TestUserOnboardingTemplateRejectsInvalidOverrides(t *testing.T) {
+	for _, ext := range []string{".html", ".txt"} {
+		t.Run(ext, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "UserOnboarding"+ext), []byte("{{ invalidTemplate }}"), 0600))
+			_, err := New(Config{EmailTemplatesPath: dir})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "UserOnboarding"+ext)
 		})
 	}
 }

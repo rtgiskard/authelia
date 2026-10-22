@@ -1,0 +1,28 @@
+Authelia
+
+
+{{ .Title }}
+
+{{ notificationText .Language "Hello" }} {{ .DisplayName }},
+
+{{ notificationText .Language "Welcome! An administrator has created an account for you. Please set your password to get started." }}
+
+{{ notificationText .Language "Username" }}: {{ .Username }}
+
+{{ notificationText .Language "Email" }}: {{ .Email }}
+
+{{ notificationText .Language "Valid for" }}: {{ .Validity }}
+
+{{ if not .ExpiresAt.IsZero }}{{ notificationText .Language "Expires at" }}: {{ .ExpiresAt.UTC.Format "2006-01-02 15:04:05 UTC" }}{{ end }}
+
+{{ .LinkText }}: {{ .LinkURL }}
+
+{{ notificationText .Language "After setting your password, open the sign-in page below and sign in with your username and new password." }}
+
+{{ notificationText .Language "Sign-in page" }}: {{ .LoginURL }}
+
+{{ notificationText .Language "If this link has expired, contact your administrator to send a new one." }}
+
+{{ notificationText .Language "If you were not expecting this invitation, you can ignore this email or contact your administrator." }}
+
+{{ notificationText .Language "Do not forward this email or share this link." }}

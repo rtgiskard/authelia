@@ -41,11 +41,17 @@ This guide effectively documents the usage of the
 |          Event          |                           Used to render notifications sent about events                            |
 | IdentityVerificationOTC | Used to render notifications sent when stateful validation is required such as managing credentials |
 | IdentityVerificationJWT | Used to render notifications sent when stateless validation is required such as resetting passwords |
+| UserOnboarding | Welcomes newly created accounts with account details, a password setup link, and sign-in instructions |
 
 For example, to modify the `IdentityVerificationJWT` HTML template, if your
 [template_path](../../configuration/notifications/introduction.md#template_path) was configured as
 `/config/email_templates`, you would create the `/config/email_templates/IdentityVerificationJWT.html` file to override the
 HTML `IdentityVerificationJWT` template.
+
+New-account emails use the separate `UserOnboarding.html` and `UserOnboarding.txt` templates, not the password reset or
+generic event templates. Each file can be overridden independently in `template_path`; a missing override uses the
+built-in template. Invalid override syntax remains a configuration error rather than silently replacing custom content.
+Platform-specific help, service links, and branding belong in these deployment-managed overrides.
 
 ## Placeholder Variables
 
@@ -55,14 +61,17 @@ In template files, you can use the following placeholders which are automaticall
 | :-------------------------: | :----------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |       `{{ .Title }}`        |                       All                        | A predefined title for the email, matching the subject line. See [Events](../../configuration/notifications/events.md) for the value sent by each notification. |
 | `{{ .Language }}` | All | The selected built-in notification language: `en` or `zh-CN`. |
-| `{{ .ExpiresAt }}` | IdentityVerificationJWT, IdentityVerificationOTC | The expiration time as a Go `time.Time`; format with `.ExpiresAt.UTC.Format "2006-01-02 15:04:05 UTC"`. |
+| `{{ .ExpiresAt }}` | UserOnboarding, IdentityVerificationJWT, IdentityVerificationOTC | The expiration time as a Go `time.Time`; format with `.ExpiresAt.UTC.Format "2006-01-02 15:04:05 UTC"`. |
 | `{{ .Administrator }}` | Event, IdentityVerificationJWT | Whether an administrator initiated the notification. |
-| `{{ .NewAccount }}` | IdentityVerificationJWT | Whether the link invites a newly created account to choose its password. |
+| `{{ .Username }}` | UserOnboarding | The account username used to sign in. |
+| `{{ .Email }}` | UserOnboarding | The account email address. |
+| `{{ .LoginURL }}` | UserOnboarding | The configured sign-in URL, including its base path and port. |
+| `{{ .Validity }}` | UserOnboarding | The localized, human-readable actual link lifetime, such as `2 hours`; reflects any configured override. |
 |    `{{ .DisplayName }}`     |                       All                        |                                                              The name of the user, i.e. `John Doe`                                                              |
-|      `{{ .RemoteIP }}`      |                       All                        |                                               The remote IP address (client) that initiated the request or event.                                               |
+| `{{ .RemoteIP }}` | Event, IdentityVerificationJWT, IdentityVerificationOTC | The remote IP address (client) that initiated the request or event. |
 |       `{{ .Domain }}`       | IdentityVerificationJWT, IdentityVerificationOTC |                                                                The relevant domain for Authelia.                                                                |
-|      `{{ .LinkURL }}`       |             IdentityVerificationJWT              |                                                            The URL associated with the notification.                                                            |
-|      `{{ .LinkText }}`      |             IdentityVerificationJWT              |                                                 The display value for the URL associated with the notification.                                                 |
+| `{{ .LinkURL }}` | UserOnboarding, IdentityVerificationJWT | The URL associated with the notification. |
+| `{{ .LinkText }}` | UserOnboarding, IdentityVerificationJWT | The display value for the URL associated with the notification. |
 | `{{ .RevocationLinkURL }}`  | IdentityVerificationJWT, IdentityVerificationOTC |                                                      The Revocation URL associated with the notification.                                                       |
 | `{{ .RevocationLinkText }}` | IdentityVerificationJWT, IdentityVerificationOTC |                                           The display value for the Revocation URL associated with the notification.                                            |
 |    `{{ .OneTimeCode }}`     |             IdentityVerificationOTC              |                                                The One-Time Code the user must supply to confirm their identity.                                                |

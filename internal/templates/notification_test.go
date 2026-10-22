@@ -27,6 +27,11 @@ func TestLocalizedNotificationTemplates(t *testing.T) {
 			hasExpiration bool
 		}{
 			{
+				"Onboarding", provider.GetUserOnboardingEmailTemplate(),
+				EmailUserOnboardingValues{Language: lang, Title: "Envelope title", DisplayName: "John <script>", Username: "john", Email: "john@example.com", LoginURL: "https://auth.example.com/", LinkURL: "https://auth.example.com/reset?token=secret", LinkText: "Action label", ExpiresAt: expires, Validity: NotificationValidity(lang, 90*time.Minute)},
+				"https://auth.example.com/reset?token=secret", true,
+			},
+			{
 				"ResetLink", provider.GetIdentityVerificationJWTEmailTemplate(),
 				EmailIdentityVerificationJWTValues{Language: lang, Title: "Envelope title", DisplayName: "John <script>", Domain: "example.com", LinkURL: "https://auth.example.com/reset?token=secret", LinkText: "Action label", ExpiresAt: expires},
 				"https://auth.example.com/reset?token=secret", true,
@@ -62,5 +67,24 @@ func TestLocalizedNotificationTemplates(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestNotificationValidity(t *testing.T) {
+	for _, tc := range []struct {
+		language string
+		lifetime time.Duration
+		expected string
+	}{
+		{"en", 2 * time.Hour, "2 hours"},
+		{"zh-CN", 2 * time.Hour, "2 小时"},
+		{"en", 90 * time.Minute, "1 hour 30 minutes"},
+		{"zh-CN", 90 * time.Minute, "1 小时 30 分钟"},
+		{"en", time.Hour + time.Minute + 1500*time.Millisecond, "1 hour 1 minute 1.5 seconds"},
+		{"en", 250 * time.Millisecond, "0.25 seconds"},
+	} {
+		t.Run(tc.expected, func(t *testing.T) {
+			assert.Equal(t, tc.expected, NotificationValidity(tc.language, tc.lifetime))
+		})
 	}
 }

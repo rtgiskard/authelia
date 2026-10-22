@@ -16,7 +16,7 @@ type IdentityValidation struct {
 
 // IdentityValidationResetPassword represents the tunable aspects of the reset password identity verification action/flow.
 type IdentityValidationResetPassword struct {
-	JWTExpiration time.Duration `koanf:"jwt_lifespan" yaml:"jwt_lifespan,omitempty" toml:"jwt_lifespan,omitempty" json:"jwt_lifespan,omitempty" jsonschema:"title=JWT Lifespan,default=30 minutes" jsonschema_description:"The lifespan of the JSON Web Token after it's initially generated after which it's considered invalid."`
+	JWTExpiration time.Duration `koanf:"jwt_lifespan" yaml:"jwt_lifespan,omitempty" toml:"jwt_lifespan,omitempty" json:"jwt_lifespan,omitempty" jsonschema:"title=JWT Lifespan,default=2 hours" jsonschema_description:"The lifespan of the JSON Web Token after it's initially generated after which it's considered invalid."`
 	JWTAlgorithm  string        `koanf:"jwt_algorithm" yaml:"jwt_algorithm,omitempty" toml:"jwt_algorithm,omitempty" json:"jwt_algorithm,omitempty" jsonschema:"title=JWT Algorithm,default=HS256,enum=HS256,enum=HS384,enum=HS512" jsonschema_description:"The JSON Web Token Algorithm (JWA) used to sign the Reset Password flow JSON Web Token's."`
 	JWTSecret     string        `koanf:"jwt_secret" yaml:"jwt_secret,omitempty" toml:"jwt_secret,omitempty" json:"jwt_secret,omitempty" jsonschema:"title=JWT Secret" jsonschema_description:"The secret key used to sign the Reset Password flow JSON Web Token's."`
 }
@@ -33,7 +33,7 @@ type IdentityValidationElevatedSession struct {
 // DefaultIdentityValidation has the default values for the IdentityValidation configuration.
 var DefaultIdentityValidation = IdentityValidation{
 	ResetPassword: IdentityValidationResetPassword{
-		JWTExpiration: time.Minute * 30,
+		JWTExpiration: time.Hour * 2,
 		JWTAlgorithm:  "HS256",
 	},
 	ElevatedSession: IdentityValidationElevatedSession{

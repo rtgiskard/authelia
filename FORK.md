@@ -87,10 +87,20 @@ selected verification. Other settings keep the global elevated-session policy; d
 Password setup emails contain links, never generated or manually chosen passwords. Administrator link requests leave
 the current password unchanged; creation and delivery results are reported independently. The admin API uses
 `send_password_link` instead of the removed `generate_password` field. Password-reset submissions carry the original
-`token` alongside `password`; session state no longer grants password-reset authorization. Links expire after 30 minutes
+`token` alongside `password`; session state no longer grants password-reset authorization. Links expire after two hours
 by default, survive form reloads and unsuccessful attempts, and all outstanding account reset links are invalidated
 after a successful password reset. Built-in emails support English and Simplified Chinese through
 `notifier.default_language` and supported self-service language preferences.
+
+Enabled new-user notifications use one onboarding email containing account details, a password-setup link, the actual
+configured validity and expiry, and instructions to contact the administrator for a replacement after expiry. Manual
+password creation and explicit notification opt-out remain available; sending an invitation does not change an existing
+password. The dedicated `UserOnboarding.html` and `UserOnboarding.txt` templates support deployment overrides through
+`notifier.template_path`, with generic built-in onboarding when no override is provided. Platform introductions, network
+access instructions, homepages, and documentation links belong in deployment templates rather than application code.
+Account creation still completes before the synchronous delivery attempt, and the response reports both outcomes.
+Deployment manifests with explicit template mount allowlists must include both onboarding files. Roll out these overrides
+with an application image containing the onboarding provider flow; adding ConfigMap keys alone does not activate them.
 
 Password-reset pages keep validation errors beside the relevant fields and show explicit link-unavailable and completion
 states. Administrator reset dialogs show the target account and distinguish sending a link from setting a password;

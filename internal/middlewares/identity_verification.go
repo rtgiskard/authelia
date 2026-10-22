@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -48,8 +49,29 @@ func IdentityVerificationStart(args IdentityVerificationStartArgs, delayer Delay
 	}
 }
 
-// SendPasswordResetEmail sends an administrator's invitation without changing the current password.
-func SendPasswordResetEmail(ctx *AutheliaCtx, identity session.Identity, newAccount bool) error {
+// SendPasswordResetEmail sends an administrator's reset link without changing the current password.
+func SendPasswordResetEmail(ctx *AutheliaCtx, identity session.Identity) error {
+	return sendPasswordLinkEmail(ctx, identity, false)
+}
+
+// SendUserOnboardingEmail welcomes a newly created account with a password setup link.
+// The existing password remains valid until the recipient completes the reset.
+func SendUserOnboardingEmail(ctx *AutheliaCtx, identity session.Identity) error {
+	return sendPasswordLinkEmail(ctx, identity, true)
+}
+
+func sendPasswordLinkEmail(ctx *AutheliaCtx, identity session.Identity, onboarding bool) error {
+	switch {
+	case ctx.Configuration.AuthenticationBackend.PasswordReset.Disable:
+		return fmt.Errorf("password reset links are disabled")
+	case ctx.Configuration.AuthenticationBackend.PasswordReset.CustomURL.String() != "":
+		return fmt.Errorf("password reset links use a custom URL")
+	case strings.TrimSpace(ctx.Configuration.IdentityValidation.ResetPassword.JWTSecret) == "":
+		return fmt.Errorf("password reset signing secret is not configured")
+	case ctx.Configuration.IdentityValidation.ResetPassword.JWTExpiration <= 0:
+		return fmt.Errorf("password reset link validity must be positive")
+	}
+
 	language := ctx.Configuration.Notifier.DefaultLanguage
 	if language == "" {
 		language = "en"
@@ -58,10 +80,10 @@ func SendPasswordResetEmail(ctx *AutheliaCtx, identity session.Identity, newAcco
 	return sendIdentityVerificationEmail(ctx, identity, IdentityVerificationStartArgs{
 		MailTitle: "Reset your password", MailButtonContent: "Reset", MailButtonRevokeContent: "Revoke",
 		TargetEndpoint: "/reset-password/step2", RevokeEndpoint: "/revoke/reset-password", ActionClaim: "ResetPassword",
-	}, language, true, newAccount)
+	}, language, true, onboarding)
 }
 
-func sendIdentityVerificationEmail(ctx *AutheliaCtx, identity session.Identity, args IdentityVerificationStartArgs, language string, administrator, newAccount bool) error {
+func sendIdentityVerificationEmail(ctx *AutheliaCtx, identity session.Identity, args IdentityVerificationStartArgs, language string, administrator, onboarding bool) error {
 	issuerURL, err := ctx.IssuerURL()
 	if err != nil {
 		return fmt.Errorf("determining issuer: %w", err)
@@ -97,12 +119,24 @@ func sendIdentityVerificationEmail(ctx *AutheliaCtx, identity session.Identity, 
 		u.RawQuery = query.Encode()
 		return u.String()
 	}
+	if onboarding {
+		const subject = "Your account has been created — set your password to get started"
+		data := templates.EmailUserOnboardingValues{
+			Language: language, Title: subject, DisplayName: identity.DisplayName,
+			Username: identity.Username, Email: identity.Email, LoginURL: issuerURL.JoinPath("/").String(),
+			LinkURL: link(args.TargetEndpoint), LinkText: "Set your password", ExpiresAt: verification.ExpiresAt,
+			Validity: templates.NotificationValidity(language, verification.ExpiresAt.Sub(verification.IssuedAt)),
+		}
+
+		return ctx.SendNotification(identity.Address(), subject, ctx.Providers.Templates.GetUserOnboardingEmailTemplate(), data)
+	}
+
 	domain, _ := ctx.GetCookieDomain()
 	data := templates.EmailIdentityVerificationJWTValues{
 		Title: args.MailTitle, LinkURL: link(args.TargetEndpoint), LinkText: args.MailButtonContent,
 		RevocationLinkURL: link(args.RevokeEndpoint), RevocationLinkText: args.MailButtonRevokeContent,
 		DisplayName: identity.DisplayName, Domain: domain, RemoteIP: ctx.RemoteIP().String(),
-		Language: language, ExpiresAt: verification.ExpiresAt, Administrator: administrator, NewAccount: newAccount,
+		Language: language, ExpiresAt: verification.ExpiresAt, Administrator: administrator,
 	}
 
 	return ctx.SendNotification(identity.Address(), args.MailTitle, ctx.Providers.Templates.GetIdentityVerificationJWTEmailTemplate(), data)

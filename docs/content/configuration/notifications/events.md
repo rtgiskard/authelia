@@ -19,7 +19,7 @@ seo:
 ---
 
 Authelia sends a fixed set of notifications. Every notification is addressed to the email address recorded for the user
-in the [authentication backend](../first-factor/introduction.md), is rendered from one of three
+in the [authentication backend](../first-factor/introduction.md), is rendered from one of four
 [templates](../../reference/guides/notification-templates.md), and is delivered by whichever
 [notifier](introduction.md) you have configured.
 
@@ -33,9 +33,9 @@ manually chosen password may omit the account-created notification; password set
 | :-------------------------: | :-----------------------------: | :-----------------------: |
 |  Password reset requested   |      `Reset your password`      | `IdentityVerificationJWT` |
 | Session elevation requested |     `Confirm your identity`     | `IdentityVerificationOTC` |
-| Administrator invites a new account | `Set your password` | `IdentityVerificationJWT` |
+| Administrator invites a new account | `Your account has been created` | `UserOnboarding` |
 | Administrator sends a reset link | `Reset your password` | `IdentityVerificationJWT` |
-| Administrator creates an account with a manual password | `User created successfully` | `Event` |
+| Administrator creates an account with a manual password | `Your account has been created` | `UserOnboarding` |
 | Administrator sets a password directly | `Password reset successfully` | `Event` |
 |  Password reset completed   | `Password changed successfully` |          `Event`          |
 |      Password changed       | `Password changed successfully` |          `Event`          |
@@ -57,12 +57,18 @@ always responds identically in order to prevent user enumeration. No notificatio
 
 ### Administrator invites a new account
 
-When an administrator chooses to send a password setup link, the account is created with an undisclosed random initial
-password. The invitation contains a setup link, never the initial password. Choosing a new password completes the normal
-reset flow. Administrators may instead set a password manually; no password is included in the optional creation email.
+Both account creation modes send the independent `UserOnboarding` email when notifications are enabled. It includes the
+username and email address, password setup link, configured sign-in URL, actual link lifetime and absolute expiration,
+and short sign-in instructions. If the link expires, the recipient must contact their administrator for a new link.
 
-Failed invitation delivery does not undo account creation. The management portal reports the delivery failure separately
-so the administrator can send a fresh setup link without creating the account again.
+When an administrator chooses to send a password setup link, the account is created with an undisclosed random initial
+password. Administrators may instead set a password manually and optionally disable notification. The onboarding email
+never includes a password. Sending the email does not invalidate a manually chosen password or force a password change;
+choosing a new password completes the normal reset flow and invalidates outstanding reset links.
+
+Failed delivery or unavailable link configuration does not undo account creation. The management portal reports the
+delivery failure separately so the administrator can correct the configuration and send a fresh reset link without
+creating the account again. Notifications are sent synchronously, without a delivery queue or automatic retries.
 
 ### Session elevation requested
 
