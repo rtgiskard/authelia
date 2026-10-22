@@ -135,7 +135,7 @@ const ResetPasswordStep2 = function () {
                   : "This reset link is invalid or no longer available. Request a new link to continue.";
 
     return (
-        <MinimalLayout title={translate(title)} id="reset-password-step2-stage">
+        <MinimalLayout title={translate(title)} id="reset-password-step2-stage" variant="card">
             {completed ? (
                 <div className="space-y-6" role="status">
                     <div className="flex size-11 items-center justify-center rounded-full bg-success/10 text-success">

@@ -73,6 +73,7 @@ const ResetPasswordStep1 = function () {
         <MinimalLayout
             title={translate(sent ? "Check your email" : "Reset password")}
             id="reset-password-step1-stage"
+            variant="card"
         >
             {sent ? (
                 <div className="space-y-6" role="status">

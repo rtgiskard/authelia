@@ -19,6 +19,7 @@ export interface Props {
     children?: ReactNode;
     title?: null | string;
     userInfo?: UserInfo;
+    variant?: "card" | "default";
 }
 
 const MinimalLayout = function (props: Props) {
@@ -38,6 +39,27 @@ const MinimalLayout = function (props: Props) {
     useEffect(() => {
         document.title = translate("Login - {{authelia}}", { authelia: atob(String.fromCodePoint(...EncodedName)) });
     }, [translate]);
+
+    if (props.variant === "card") {
+        return (
+            <div className="min-h-svh bg-muted/30">
+                <AppBarLoginPortal userInfo={props.userInfo} />
+                <main
+                    id={props.id}
+                    className="mx-auto flex min-h-[85svh] w-full max-w-[480px] flex-col justify-center px-4 py-10 sm:pb-24"
+                >
+                    <div className="mb-6 flex justify-center [&_svg]:h-10 [&_svg]:w-10 [&_img]:w-10">{logo}</div>
+                    <section className="rounded-xl border bg-card px-6 py-7 text-card-foreground shadow-sm sm:px-8 sm:py-8">
+                        {props.title ? (
+                            <h1 className="mb-3 text-2xl font-semibold tracking-tight">{props.title}</h1>
+                        ) : null}
+                        {props.children}
+                    </section>
+                </main>
+                <PrivacyPolicyDrawer />
+            </div>
+        );
+    }
 
     return (
         <div>

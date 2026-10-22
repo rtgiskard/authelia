@@ -1114,7 +1114,7 @@ const UserManagementView = () => {
 
             <div className="flex w-full items-start justify-center px-3 pt-4 pb-12 md:px-6 md:pt-8">
                 <div className="w-full overflow-hidden rounded-xl border bg-card shadow-sm">
-                    <header className="border-b p-6 md:p-8">
+                    <header className="border-b p-5 md:p-6">
                         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                             {translate("User Management")}
                         </h1>
@@ -1123,7 +1123,7 @@ const UserManagementView = () => {
                         </p>
                     </header>
 
-                    <div className="flex flex-col gap-6 p-5 md:p-8">
+                    <div className="flex flex-col gap-5 p-4 md:p-6">
                         {capabilitiesLoading ? (
                             <CenteredState
                                 action={
@@ -1203,7 +1203,7 @@ const UserManagementView = () => {
                                     />
                                 ) : (
                                     <Fragment>
-                                        <div className="rounded-lg border bg-muted/30 p-4">
+                                        <div>
                                             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                                                 <div className="w-full md:max-w-lg">
                                                     <Label className="mb-2" htmlFor="user-management-search">
@@ -1427,13 +1427,13 @@ const UserDialog = ({
                 if (!nextOpen) onClose();
             }}
         >
-            <DialogContent className="max-h-[90vh] overflow-y-auto" showCloseButton={false}>
-                <form noValidate onSubmit={onSubmit}>
+            <DialogContent className="max-h-[90vh] grid-rows-[minmax(0,1fr)] overflow-hidden" showCloseButton={false}>
+                <form className="flex min-h-0 flex-col gap-6" noValidate onSubmit={onSubmit}>
                     <DialogHeader>
                         <DialogTitle>{title}</DialogTitle>
                         <DialogDescription>{subtitle}</DialogDescription>
                     </DialogHeader>
-                    <div className="mt-6 space-y-4">
+                    <div className="min-h-0 space-y-4 overflow-y-auto">
                         <div>
                             <Label className="mb-2" htmlFor="user-dialog-username">
                                 {translate("Username")} *
@@ -1607,7 +1607,7 @@ const UserDialog = ({
                             </Alert>
                         ) : null}
                     </div>
-                    <DialogFooter className="mt-6">
+                    <DialogFooter className="shrink-0">
                         <Button disabled={loading} onClick={onClose} variant="outline">
                             {translate("Cancel")}
                         </Button>
@@ -1820,7 +1820,7 @@ const UserTable = ({
     translate,
     users,
 }: UserTableProps) => (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto border-y">
         <table className="w-full text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr className="border-b">
@@ -1939,16 +1939,16 @@ const UserCards = ({
 }: UserCollectionProps) => (
     <div className="space-y-3">
         {users.map((user) => (
-            <Card className="gap-0 py-0" key={user.username}>
-                <CardContent className="p-5">
+            <Card className="gap-0 py-0 shadow-none" key={user.username}>
+                <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                        <div>
-                            <p className="font-semibold">{user.display_name}</p>
-                            <p className="text-sm text-muted-foreground">{user.username}</p>
+                        <div className="min-w-0">
+                            <p className="break-words font-semibold">{user.display_name}</p>
+                            <p className="break-words text-sm text-muted-foreground">{user.username}</p>
                         </div>
                         <StatusChip disabled={user.disabled} translate={translate} />
                     </div>
-                    <p className={`mt-3 text-sm ${user.email ? "" : "text-muted-foreground"}`}>
+                    <p className={`mt-3 break-words text-sm ${user.email ? "" : "text-muted-foreground"}`}>
                         {user.email || translate("Not Set")}
                     </p>
                     <div className="mt-3">
@@ -1968,7 +1968,7 @@ const UserCards = ({
                         )}
                     </div>
                 </CardContent>
-                <CardFooter className="justify-end border-t px-5 py-3">
+                <CardFooter className="justify-end border-t px-4 py-2">
                     <RowActions
                         canDelete={canDelete}
                         canResetPassword={canResetPassword}
@@ -2014,11 +2014,13 @@ const StatusChip = ({ disabled, translate }: { disabled: boolean; translate: (ke
 const ActionButton = ({
     ariaLabel,
     children,
+    destructive = false,
     label,
     onClick,
 }: {
     ariaLabel: string;
     children: ReactNode;
+    destructive?: boolean;
     label: string;
     onClick: () => void;
 }) => (
@@ -2026,7 +2028,15 @@ const ActionButton = ({
         <Tooltip>
             <TooltipTrigger
                 render={
-                    <Button aria-label={ariaLabel} onClick={onClick} size="icon-sm" variant="ghost">
+                    <Button
+                        aria-label={ariaLabel}
+                        className={
+                            destructive ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : undefined
+                        }
+                        onClick={onClick}
+                        size="icon-sm"
+                        variant="ghost"
+                    >
                         {children}
                     </Button>
                 }
@@ -2057,7 +2067,7 @@ const RowActions = ({
     translate: (key: string) => string;
     user: AdminUser;
 }) => (
-    <div className="flex justify-end gap-1">
+    <div className="flex items-center justify-end gap-1">
         {canUpdate ? (
             <ActionButton
                 ariaLabel={`${translate("Edit User")} ${user.username}`}
@@ -2076,9 +2086,13 @@ const RowActions = ({
                 <KeyRound />
             </ActionButton>
         ) : null}
+        {(canUpdate || canResetPassword) && (canUpdate || canDelete) ? (
+            <span aria-hidden="true" className="mx-1 h-5 border-l" />
+        ) : null}
         {canUpdate ? (
             <ActionButton
                 ariaLabel={`${user.disabled ? translate("Enable User") : translate("Disable User")} ${user.username}`}
+                destructive={!user.disabled}
                 label={user.disabled ? translate("Enable User") : translate("Disable User")}
                 onClick={onToggle}
             >
@@ -2088,6 +2102,7 @@ const RowActions = ({
         {canDelete ? (
             <ActionButton
                 ariaLabel={`${translate("Delete User")} ${user.username}`}
+                destructive
                 label={translate("Delete User")}
                 onClick={onDelete}
             >
@@ -2098,7 +2113,7 @@ const RowActions = ({
 );
 
 const CenteredState = ({ action, description, title }: { action?: ReactNode; description: string; title: string }) => (
-    <Card className="min-h-52 items-center justify-center bg-muted/20 px-6 py-10 text-center">
+    <Card className="min-h-52 items-center justify-center border-0 bg-muted/20 px-6 py-10 text-center shadow-none">
         <CardContent className="flex max-w-md flex-col items-center gap-3 p-0">
             <h2 className="text-lg font-semibold">{title}</h2>
             <p className="text-muted-foreground">{description}</p>

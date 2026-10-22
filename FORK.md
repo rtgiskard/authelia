@@ -92,6 +92,11 @@ by default, survive form reloads and unsuccessful attempts, and all outstanding 
 after a successful password reset. Built-in emails support English and Simplified Chinese through
 `notifier.default_language` and supported self-service language preferences.
 
+Password-reset pages keep validation errors beside the relevant fields and show explicit link-unavailable and completion
+states. Administrator reset dialogs show the target account and distinguish sending a link from setting a password;
+creation and editing dialogs keep their actions visible while long field lists scroll. Portal theme palettes follow the
+root theme state so the server's initial body configuration cannot override a user's selected theme.
+
 Fork container builds follow the upstream toolchain and frontend lockfile. Port-specific Authelia URLs, default-port
 normalization, and elevation rate-limit feedback remain supported.
 
