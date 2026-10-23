@@ -86,6 +86,14 @@ Authelia writes this file back in the same format it reads it in, for example wh
 must therefore not change the extension of an existing file without also converting its contents.
 {{< /callout >}}
 
+In this fork, an explicit empty password (`password: ""` in YAML) represents a pending account with no configured
+password. Normal authentication profile lookups, including passkey login and Basic authentication, reject pending accounts.
+Completing password setup through a valid email link, or setting a nonblank password as an administrator, writes a hash
+and ends the pending state. Blank passwords are rejected even when password policy is disabled. The independent
+`disabled` flag still blocks login and self-service password setup. Existing sessions follow the configured refresh interval;
+clearing a hash does not immediately revoke sessions or OAuth tokens. Existing nonempty hashes remain configured credentials;
+nonempty invalid hashes are rejected. Older versions that require a password hash cannot load pending accounts.
+
 ### watch
 
 {{< confkey type="boolean" default="false" required="no" >}}

@@ -974,11 +974,10 @@ paths:
         Creates a File-backed user. Requires administration to be enabled, administrator authorization,
         and completed administrator session verification. In manual mode, password must satisfy the configured
         password policy and notify optionally sends an account creation notification (default false).
-        In link mode, the backend creates an undisclosed random initial password satisfying the configured
-        password policy, creates the account, and sends a password reset link instead of a password.
+        In link mode, the backend creates the account with an empty password and sends a password setup link.
+        The account is pending activation and cannot authenticate until a password is set.
         Link delivery is mandatory regardless of notify. No password is returned or mailed.
-        Link mode is rejected before account creation when self-service password reset is disabled,
-        a custom password reset URL is configured, or the password reset JWT secret is missing.
+        Account creation is preserved if link configuration is unavailable or delivery fails.
         Account creation and notification delivery have separate outcomes: a successful response means
         the account was created even if notification_sent is false. Delivery failure does not roll back creation.
       requestBody:
@@ -3252,6 +3251,7 @@ components:
         - email
         - groups
         - disabled
+        - pending_activation
       properties:
         username:
           type: string
@@ -3265,6 +3265,10 @@ components:
             type: string
         disabled:
           type: boolean
+        pending_activation:
+          type: boolean
+          readOnly: true
+          description: True when the account has no password. Independent of disabled; cleared by setting a password.
         created_at:
           type: string
           format: date-time
@@ -3282,7 +3286,7 @@ components:
         - email
       description: >
         Manual mode requires a nonempty policy-compliant password. Link mode ignores password and
-        creates an undisclosed policy-compliant random initial password.
+        creates a pending account with an empty password until password setup succeeds.
       properties:
         username:
           type: string

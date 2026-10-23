@@ -91,7 +91,7 @@ func (p *FileUserProvider) Close() (err error) {
 
 // CreateUser creates a new user in the file backend.
 func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
-	if strings.TrimSpace(details.Username) == "" || strings.TrimSpace(details.Password) == "" || strings.TrimSpace(details.DisplayName) == "" || strings.TrimSpace(details.Email) == "" {
+	if strings.TrimSpace(details.Username) == "" || strings.TrimSpace(details.DisplayName) == "" || strings.TrimSpace(details.Email) == "" {
 		return ErrOperationFailed
 	}
 
@@ -103,20 +103,29 @@ func (p *FileUserProvider) CreateUser(details UserDetailsCreate) (err error) {
 
 	var digest algorithm.Digest
 
-	if digest, err = p.hash.Hash(details.Password); err != nil {
-		return fmt.Errorf("%w : %v", ErrOperationFailed, err)
+	if details.Password != "" {
+		if strings.TrimSpace(details.Password) == "" {
+			return ErrOperationFailed
+		}
+
+		if digest, err = p.hash.Hash(details.Password); err != nil {
+			return fmt.Errorf("%w : %v", ErrOperationFailed, err)
+		}
 	}
 
 	createdAt := time.Now().UTC()
 
 	user := FileUserDatabaseUserDetails{
 		Username:    details.Username,
-		Password:    schema.NewPasswordDigest(digest),
 		Disabled:    details.Disabled,
 		DisplayName: details.DisplayName,
 		Email:       details.Email,
 		Groups:      details.Groups,
 		CreatedAt:   &createdAt,
+	}
+
+	if digest != nil {
+		user.Password = schema.NewPasswordDigest(digest)
 	}
 
 	if err = p.database.CreateUserDetails(details.Username, &user); err != nil {
@@ -221,6 +230,10 @@ func (p *FileUserProvider) AdminDeleteUser(username string) (err error) {
 }
 
 func (p *FileUserProvider) AdminResetUserPassword(username string, password string) (err error) {
+	if strings.TrimSpace(password) == "" {
+		return ErrPasswordWeak
+	}
+
 	var digest algorithm.Digest
 
 	if digest, err = p.hash.Hash(password); err != nil {
@@ -253,6 +266,10 @@ func (p *FileUserProvider) CheckUserPassword(username string, password string) (
 		return false, ErrUserNotFound
 	}
 
+	if !details.Password.Valid() {
+		return false, nil
+	}
+
 	return details.Password.MatchAdvanced(password)
 }
 
@@ -264,7 +281,7 @@ func (p *FileUserProvider) GetDetails(username string) (details *UserDetails, er
 		return nil, err
 	}
 
-	if d.Disabled {
+	if d.Disabled || !d.Password.Valid() {
 		return nil, ErrUserNotFound
 	}
 
@@ -279,15 +296,34 @@ func (p *FileUserProvider) GetDetailsExtended(username string) (details *UserDet
 		return nil, err
 	}
 
-	if d.Disabled {
+	if d.Disabled || !d.Password.Valid() {
 		return nil, ErrUserNotFound
 	}
 
 	return d.ToExtendedUserDetails(), nil
 }
 
+// GetDetailsForPasswordReset retrieves enabled users, including those awaiting password setup.
+func (p *FileUserProvider) GetDetailsForPasswordReset(username string) (details *UserDetails, err error) {
+	var d FileUserDatabaseUserDetails
+
+	if d, err = p.database.GetUserDetails(username); err != nil {
+		return nil, err
+	}
+
+	if d.Disabled {
+		return nil, ErrUserNotFound
+	}
+
+	return d.ToUserDetails(), nil
+}
+
 // UpdatePassword update the password of the given user.
 func (p *FileUserProvider) UpdatePassword(username string, newPassword string) (err error) {
+	if strings.TrimSpace(newPassword) == "" {
+		return ErrPasswordWeak
+	}
+
 	var digest algorithm.Digest
 
 	if digest, err = p.hash.Hash(newPassword); err != nil {
@@ -401,12 +437,13 @@ func (m FileUserDatabaseUserDetails) ToAdminUserDetails() (details UserProviderA
 	}
 
 	return UserProviderAdminUserDetails{
-		Username:    m.Username,
-		DisplayName: m.DisplayName,
-		Email:       m.Email,
-		Groups:      groups,
-		Disabled:    m.Disabled,
-		CreatedAt:   m.CreatedAt,
+		Username:          m.Username,
+		DisplayName:       m.DisplayName,
+		Email:             m.Email,
+		Groups:            groups,
+		Disabled:          m.Disabled,
+		PendingActivation: !m.Password.Valid(),
+		CreatedAt:         m.CreatedAt,
 	}
 }
 

@@ -7,6 +7,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -325,6 +326,42 @@ func TestResetPasswordPOST_LinkLifecycle(t *testing.T) {
 	}
 }
 
+func TestResetPasswordPOST_BlankPasswordPreservesSetupLink(t *testing.T) {
+	for _, password := range []string{"", " \t\r\n", "\u00a0\u2003"} {
+		t.Run(fmt.Sprintf("password=%q", password), func(t *testing.T) {
+			mock, store := newTestPasswordResetFlow(t)
+			mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{})
+			token, verification := issueTestPasswordResetLink(t, mock, store)
+			pending := true
+			mock.UserProviderMock.EXPECT().UpdatePassword(testUsername, "password123").DoAndReturn(func(_, _ string) error {
+				pending = false
+				return nil
+			})
+			mock.UserProviderMock.EXPECT().GetDetails(testUsername).Return(&authentication.UserDetails{Username: testUsername}, nil)
+
+			body, err := json.Marshal(resetPasswordStep2RequestBody{Token: token, Password: password})
+			require.NoError(t, err)
+			mock.Ctx.Request.SetBody(body)
+			ResetPasswordPOST(mock.Ctx)
+			assert.Equal(t, messagePasswordWeak, mock.GetResponseError(t).Message)
+			assert.True(t, pending, "a rejected password must leave setup pending")
+			record, err := store.LoadIdentityVerification(context.Background(), verification.JTI.String())
+			require.NoError(t, err)
+			assert.False(t, record.ConsumedAt.Valid)
+			assert.False(t, record.RevokedAt.Valid)
+
+			mock.Ctx.Response.Reset()
+			mock.Ctx.Request.SetBodyString(fmt.Sprintf(`{"token":%q,"password":"password123"}`, token))
+			ResetPasswordPOST(mock.Ctx)
+			assert.JSONEq(t, `{"status":"OK"}`, string(mock.Ctx.Response.Body()))
+			assert.False(t, pending)
+			record, err = store.LoadIdentityVerification(context.Background(), verification.JTI.String())
+			require.NoError(t, err)
+			assert.True(t, record.ConsumedAt.Valid)
+		})
+	}
+}
+
 func TestResetPasswordPOST_BackendRejectionPreservesLinks(t *testing.T) {
 	for _, backendErr := range []error{fmt.Errorf("LDAP Result Code 19: Password fails quality checking policy"), fmt.Errorf("backend unavailable")} {
 		t.Run(backendErr.Error(), func(t *testing.T) {
@@ -429,7 +466,7 @@ func TestIdentityRetrieverFromStorage(t *testing.T) {
 
 				mock.UserProviderMock.
 					EXPECT().
-					GetDetails(testUsername).
+					GetDetailsForPasswordReset(testUsername).
 					Return(nil, fmt.Errorf("failed to get details"))
 			},
 			nil,
@@ -442,7 +479,7 @@ func TestIdentityRetrieverFromStorage(t *testing.T) {
 
 				mock.UserProviderMock.
 					EXPECT().
-					GetDetails(testUsername).
+					GetDetailsForPasswordReset(testUsername).
 					Return(&authentication.UserDetails{Username: testUsername, DisplayName: testDisplayName}, nil)
 			},
 			nil,
@@ -455,10 +492,10 @@ func TestIdentityRetrieverFromStorage(t *testing.T) {
 
 				mock.UserProviderMock.
 					EXPECT().
-					GetDetails(testUsername).
-					Return(&authentication.UserDetails{Username: testUsername, DisplayName: testDisplayName, Emails: []string{testEmail}}, nil)
+					GetDetailsForPasswordReset(testUsername).
+					Return(&authentication.UserDetails{Username: "canonical-john", DisplayName: testDisplayName, Emails: []string{testEmail}}, nil)
 			},
-			&session.Identity{Username: testUsername, DisplayName: testDisplayName, Email: testEmail},
+			&session.Identity{Username: "canonical-john", DisplayName: testDisplayName, Email: testEmail},
 			"",
 		},
 	}

@@ -16,6 +16,9 @@ import {
     ArrowUpDown,
     ChevronLeft,
     ChevronRight,
+    CircleCheck,
+    CircleSlash,
+    Hourglass,
     KeyRound,
     Pencil,
     Plus,
@@ -200,6 +203,11 @@ const rowsPerPageOptions = [10, 20, 40, 60];
 type UserSortField = "created_at" | "status" | "username";
 type UserSort = { field: UserSortField; direction: "asc" | "desc" };
 
+const userStatusOrder = { Disabled: 2, Enabled: 0, "Pending Activation": 1 };
+
+const getUserStatus = (user: Pick<AdminUser, "disabled" | "pending_activation">) =>
+    user.disabled ? "Disabled" : user.pending_activation ? "Pending Activation" : "Enabled";
+
 const toGroupsArray = (value: string) =>
     value
         .split(",")
@@ -370,7 +378,7 @@ const UserManagementView = () => {
                     break;
                 }
                 default:
-                    result = Number(a.disabled) - Number(b.disabled);
+                    result = userStatusOrder[getUserStatus(a)] - userStatusOrder[getUserStatus(b)];
             }
 
             return result === 0 ? usernameOrder : sort.direction === "asc" ? result : -result;
@@ -1904,7 +1912,7 @@ const UserTable = ({
                             )}
                         </td>
                         <td className="px-4 py-3">
-                            <StatusChip disabled={user.disabled} translate={translate} />
+                            <StatusIcon user={user} translate={translate} />
                         </td>
                         <td className="px-4 py-3 text-right">
                             <RowActions
@@ -1946,7 +1954,7 @@ const UserCards = ({
                             <p className="break-words font-semibold">{user.display_name}</p>
                             <p className="break-words text-sm text-muted-foreground">{user.username}</p>
                         </div>
-                        <StatusChip disabled={user.disabled} translate={translate} />
+                        <StatusIcon user={user} translate={translate} />
                     </div>
                     <p className={`mt-3 break-words text-sm ${user.email ? "" : "text-muted-foreground"}`}>
                         {user.email || translate("Not Set")}
@@ -1999,17 +2007,43 @@ const GroupsList = ({ groups, translate }: { groups: string[]; translate: (key: 
         <span className="text-sm text-muted-foreground">{translate("No Groups")}</span>
     );
 
-const StatusChip = ({ disabled, translate }: { disabled: boolean; translate: (key: string) => string }) => (
-    <span
-        className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${
-            disabled
-                ? "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
-                : "border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400"
-        }`}
-    >
-        {disabled ? translate("Disabled") : translate("Enabled")}
-    </span>
-);
+const StatusIcon = ({
+    translate,
+    user,
+}: {
+    user: Pick<AdminUser, "disabled" | "pending_activation">;
+    translate: (key: string) => string;
+}) => {
+    const status = getUserStatus(user);
+    const label = translate(status);
+    const Icon = status === "Disabled" ? CircleSlash : status === "Pending Activation" ? Hourglass : CircleCheck;
+    const color =
+        status === "Disabled"
+            ? "text-muted-foreground"
+            : status === "Pending Activation"
+              ? "text-amber-700 dark:text-amber-400"
+              : "text-green-700 dark:text-green-400";
+
+    return (
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger
+                    render={
+                        <span
+                            aria-label={label}
+                            className={`inline-flex shrink-0 rounded-md p-1 outline-none focus-visible:ring-2 focus-visible:ring-ring ${color}`}
+                            role="img"
+                            tabIndex={0}
+                        >
+                            <Icon aria-hidden="true" className="size-5" />
+                        </span>
+                    }
+                />
+                <TooltipContent role="tooltip">{label}</TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+};
 
 const ActionButton = ({
     ariaLabel,

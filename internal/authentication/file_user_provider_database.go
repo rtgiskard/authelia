@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator/v12"
+	"github.com/authelia/jsonschema"
 	"github.com/go-crypt/crypt"
 	"github.com/go-crypt/crypt/algorithm"
 	"github.com/pelletier/go-toml/v2"
@@ -453,7 +454,7 @@ func (m *FileUserDatabase) ToDatabaseModel() (model *FileDatabaseModel) {
 // FileUserDatabaseUserDetails is the model of user details in the file database.
 type FileUserDatabaseUserDetails struct {
 	Username       string                 `json:"-"`
-	Password       *schema.PasswordDigest `json:"password" jsonschema:"required,title=Password" jsonschema_description:"The hashed password for the user."`
+	Password       *schema.PasswordDigest `json:"password" jsonschema:"required,title=Password" jsonschema_description:"The hashed password for the user, or an empty string while awaiting password setup."`
 	DisplayName    string                 `json:"displayname" jsonschema:"required,title=Display Name" jsonschema_description:"The display name for the user."`
 	GivenName      string                 `json:"given_name,omitempty" jsonschema:"title=Given Name" jsonschema_description:"The given name for the user."`
 	MiddleName     string                 `json:"middle_name,omitempty" jsonschema:"title=Middle Name" jsonschema_description:"The middle name for the user."`
@@ -476,6 +477,15 @@ type FileUserDatabaseUserDetails struct {
 	Address *FileUserDatabaseUserDetailsAddressModel `json:"address,omitempty" jsonschema:"title=Address" jsonschema_description:"The address for the user."`
 
 	Extra map[string]any `json:"extra" jsonschema:"title=Extra" jsonschema_description:"The extra attributes for the user."`
+}
+
+// JSONSchemaExtend permits pending credentials without relaxing other password digest consumers.
+func (FileUserDatabaseUserDetails) JSONSchemaExtend(base *jsonschema.Schema) {
+	password := (schema.PasswordDigest{}).JSONSchema()
+	password.Pattern = "^$|" + password.Pattern
+	password.Title = "Password"
+	password.Description = "The hashed password for the user, or an empty string while awaiting password setup."
+	base.Properties.Set("password", password)
 }
 
 // FileUserDatabaseUserDetailsAddressModel represents the address of a user in the file user database.
@@ -539,7 +549,6 @@ func (m FileUserDatabaseUserDetails) ToExtendedUserDetails() (details *UserDetai
 // ToUserDetailsModel converts FileUserDatabaseUserDetails into a FileDatabaseUserDetailsModel.
 func (m FileUserDatabaseUserDetails) ToUserDetailsModel() (model FileDatabaseUserDetailsModel) {
 	model = FileDatabaseUserDetailsModel{
-		Password:       m.Password.Encode(),
 		DisplayName:    m.DisplayName,
 		GivenName:      m.GivenName,
 		MiddleName:     m.MiddleName,
@@ -556,6 +565,10 @@ func (m FileUserDatabaseUserDetails) ToUserDetailsModel() (model FileDatabaseUse
 		CreatedAt:      m.CreatedAt,
 		Address:        m.Address,
 		Extra:          m.Extra,
+	}
+
+	if m.Password.Valid() {
+		model.Password = m.Password.Encode()
 	}
 
 	if m.Website != nil {
@@ -731,7 +744,7 @@ func (m *FileDatabaseModel) Write(fileName string) (err error) {
 
 // FileDatabaseUserDetailsModel is the model of user details in the file database.
 type FileDatabaseUserDetailsModel struct {
-	Password       string     `yaml:"password" toml:"password" json:"password" valid:"required"`
+	Password       string     `yaml:"password" toml:"password" json:"password"`
 	DisplayName    string     `yaml:"displayname" toml:"displayname" json:"displayname" valid:"required"`
 	Email          string     `yaml:"email,omitempty" toml:"email,omitempty" json:"email,omitempty"`
 	Groups         []string   `yaml:"groups,omitempty" toml:"groups,omitempty" json:"groups,omitempty"`
@@ -824,13 +837,14 @@ func (m FileDatabaseUserDetailsModel) ValidateExtra(username string, extra map[s
 func (m FileDatabaseUserDetailsModel) ToDatabaseUserDetailsModel(username string) (model *FileUserDatabaseUserDetails, err error) {
 	var d algorithm.Digest
 
-	if d, err = crypt.Decode(m.Password); err != nil {
-		return nil, fmt.Errorf("error occurred decoding the password hash for '%s': %w", username, err)
+	if m.Password != "" {
+		if d, err = crypt.Decode(m.Password); err != nil {
+			return nil, fmt.Errorf("error occurred decoding the password hash for '%s': %w", username, err)
+		}
 	}
 
 	model = &FileUserDatabaseUserDetails{
 		Username:       username,
-		Password:       schema.NewPasswordDigest(d),
 		Disabled:       m.Disabled,
 		CreatedAt:      m.CreatedAt,
 		DisplayName:    m.DisplayName,
@@ -847,6 +861,10 @@ func (m FileDatabaseUserDetailsModel) ToDatabaseUserDetailsModel(username string
 		Groups:         m.Groups,
 		Address:        m.Address,
 		Extra:          m.Extra,
+	}
+
+	if d != nil {
+		model.Password = schema.NewPasswordDigest(d)
 	}
 
 	if m.Website != "" {

@@ -32,10 +32,13 @@ type UserProvider interface {
 	// CheckUserPassword is used to check if a password matches for a specific user.
 	CheckUserPassword(username string, password string) (valid bool, err error)
 
-	// GetDetails is used to get a user's information.
+	// GetDetails is used to get an authentication-eligible user's information.
 	GetDetails(username string) (details *UserDetails, err error)
 
 	GetDetailsExtended(username string) (details *UserDetailsExtended, err error)
+
+	// GetDetailsForPasswordReset permits pending activation, but not disabled users.
+	GetDetailsForPasswordReset(username string) (details *UserDetails, err error)
 
 	// UpdatePassword is used to change a user's password without verifying their old password.
 	UpdatePassword(username string, newPassword string) (err error)
@@ -47,6 +50,7 @@ type UserProvider interface {
 }
 
 // UserDetailsCreate is the model used to create a user in the authentication backend.
+// An empty Password creates a pending user who must set a password before authentication.
 type UserDetailsCreate struct {
 	Username    string
 	Password    string
@@ -75,12 +79,13 @@ type UserProviderAdminListResult struct {
 }
 
 type UserProviderAdminUserDetails struct {
-	Username    string     `json:"username"`
-	DisplayName string     `json:"display_name"`
-	Email       string     `json:"email"`
-	Groups      []string   `json:"groups"`
-	Disabled    bool       `json:"disabled"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	Username          string     `json:"username"`
+	DisplayName       string     `json:"display_name"`
+	Email             string     `json:"email"`
+	Groups            []string   `json:"groups"`
+	Disabled          bool       `json:"disabled"`
+	PendingActivation bool       `json:"pending_activation"`
+	CreatedAt         *time.Time `json:"created_at,omitempty"`
 }
 
 type UserProviderAdminUserUpdate struct {

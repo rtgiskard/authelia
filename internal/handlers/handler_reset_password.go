@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -147,6 +148,10 @@ func ResetPasswordPOST(ctx *middlewares.AutheliaCtx) {
 	if verification == nil {
 		return
 	}
+	if strings.TrimSpace(requestBody.Password) == "" {
+		ctx.SetJSONError(messagePasswordWeak)
+		return
+	}
 	username := verification.Username
 	if err := ctx.Providers.PasswordPolicy.Check(requestBody.Password); err != nil {
 		ctx.GetLogger().WithError(err).Error("Error occurred checking the new password against the password policy")
@@ -259,7 +264,7 @@ func identityRetrieverFromStorage(ctx *middlewares.AutheliaCtx) (*session.Identi
 		return nil, err
 	}
 
-	details, err := ctx.Providers.UserProvider.GetDetails(requestBody.Username)
+	details, err := ctx.Providers.UserProvider.GetDetailsForPasswordReset(requestBody.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +274,7 @@ func identityRetrieverFromStorage(ctx *middlewares.AutheliaCtx) (*session.Identi
 	}
 
 	return &session.Identity{
-		Username:    requestBody.Username,
+		Username:    details.Username,
 		DisplayName: details.DisplayName,
 		Email:       details.Emails[0],
 	}, nil

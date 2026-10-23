@@ -23,6 +23,7 @@ export interface AdminUser {
     email: string;
     groups: string[];
     disabled: boolean;
+    pending_activation: boolean;
     created_at?: null | string;
 }
 

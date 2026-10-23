@@ -20,95 +20,6 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// CreateUser mocks base method.
-func (m *MockUserProvider) CreateUser(details authentication.UserDetailsCreate) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateUser", details)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateUser indicates an expected call of CreateUser.
-func (mr *MockUserProviderMockRecorder) CreateUser(details any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockUserProvider)(nil).CreateUser), details)
-}
-
-func (m *MockUserProvider) AdminCapabilities() authentication.UserProviderAdminCapabilities {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminCapabilities")
-	ret0, _ := ret[0].(authentication.UserProviderAdminCapabilities)
-	return ret0
-}
-
-func (mr *MockUserProviderMockRecorder) AdminCapabilities() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminCapabilities", reflect.TypeOf((*MockUserProvider)(nil).AdminCapabilities))
-}
-
-func (m *MockUserProvider) AdminDeleteUser(username string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminDeleteUser", username)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-func (mr *MockUserProviderMockRecorder) AdminDeleteUser(username any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminDeleteUser", reflect.TypeOf((*MockUserProvider)(nil).AdminDeleteUser), username)
-}
-
-func (m *MockUserProvider) AdminGetUser(username string) (authentication.UserProviderAdminUserDetails, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminGetUser", username)
-	ret0, _ := ret[0].(authentication.UserProviderAdminUserDetails)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (mr *MockUserProviderMockRecorder) AdminGetUser(username any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminGetUser", reflect.TypeOf((*MockUserProvider)(nil).AdminGetUser), username)
-}
-
-func (m *MockUserProvider) AdminListUsers(filter authentication.UserProviderAdminListFilter) (authentication.UserProviderAdminListResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminListUsers", filter)
-	ret0, _ := ret[0].(authentication.UserProviderAdminListResult)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (mr *MockUserProviderMockRecorder) AdminListUsers(filter any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminListUsers", reflect.TypeOf((*MockUserProvider)(nil).AdminListUsers), filter)
-}
-
-func (m *MockUserProvider) AdminResetUserPassword(username, password string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminResetUserPassword", username, password)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-func (mr *MockUserProviderMockRecorder) AdminResetUserPassword(username, password any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminResetUserPassword", reflect.TypeOf((*MockUserProvider)(nil).AdminResetUserPassword), username, password)
-}
-
-func (m *MockUserProvider) AdminUpdateUser(username string, details authentication.UserProviderAdminUserUpdate) (authentication.UserProviderAdminUserDetails, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminUpdateUser", username, details)
-	ret0, _ := ret[0].(authentication.UserProviderAdminUserDetails)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (mr *MockUserProviderMockRecorder) AdminUpdateUser(username, details any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminUpdateUser", reflect.TypeOf((*MockUserProvider)(nil).AdminUpdateUser), username, details)
-}
-
 // MockUserProvider is a mock of UserProvider interface.
 type MockUserProvider struct {
 	ctrl     *gomock.Controller
@@ -131,6 +42,93 @@ func NewMockUserProvider(ctrl *gomock.Controller) *MockUserProvider {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockUserProvider) EXPECT() *MockUserProviderMockRecorder {
 	return m.recorder
+}
+
+// AdminCapabilities mocks base method.
+func (m *MockUserProvider) AdminCapabilities() authentication.UserProviderAdminCapabilities {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminCapabilities")
+	ret0, _ := ret[0].(authentication.UserProviderAdminCapabilities)
+	return ret0
+}
+
+// AdminCapabilities indicates an expected call of AdminCapabilities.
+func (mr *MockUserProviderMockRecorder) AdminCapabilities() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminCapabilities", reflect.TypeOf((*MockUserProvider)(nil).AdminCapabilities))
+}
+
+// AdminDeleteUser mocks base method.
+func (m *MockUserProvider) AdminDeleteUser(username string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminDeleteUser", username)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AdminDeleteUser indicates an expected call of AdminDeleteUser.
+func (mr *MockUserProviderMockRecorder) AdminDeleteUser(username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminDeleteUser", reflect.TypeOf((*MockUserProvider)(nil).AdminDeleteUser), username)
+}
+
+// AdminGetUser mocks base method.
+func (m *MockUserProvider) AdminGetUser(username string) (authentication.UserProviderAdminUserDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminGetUser", username)
+	ret0, _ := ret[0].(authentication.UserProviderAdminUserDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AdminGetUser indicates an expected call of AdminGetUser.
+func (mr *MockUserProviderMockRecorder) AdminGetUser(username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminGetUser", reflect.TypeOf((*MockUserProvider)(nil).AdminGetUser), username)
+}
+
+// AdminListUsers mocks base method.
+func (m *MockUserProvider) AdminListUsers(filter authentication.UserProviderAdminListFilter) (authentication.UserProviderAdminListResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminListUsers", filter)
+	ret0, _ := ret[0].(authentication.UserProviderAdminListResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AdminListUsers indicates an expected call of AdminListUsers.
+func (mr *MockUserProviderMockRecorder) AdminListUsers(filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminListUsers", reflect.TypeOf((*MockUserProvider)(nil).AdminListUsers), filter)
+}
+
+// AdminResetUserPassword mocks base method.
+func (m *MockUserProvider) AdminResetUserPassword(username, password string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminResetUserPassword", username, password)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AdminResetUserPassword indicates an expected call of AdminResetUserPassword.
+func (mr *MockUserProviderMockRecorder) AdminResetUserPassword(username, password any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminResetUserPassword", reflect.TypeOf((*MockUserProvider)(nil).AdminResetUserPassword), username, password)
+}
+
+// AdminUpdateUser mocks base method.
+func (m *MockUserProvider) AdminUpdateUser(username string, details authentication.UserProviderAdminUserUpdate) (authentication.UserProviderAdminUserDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdminUpdateUser", username, details)
+	ret0, _ := ret[0].(authentication.UserProviderAdminUserDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AdminUpdateUser indicates an expected call of AdminUpdateUser.
+func (mr *MockUserProviderMockRecorder) AdminUpdateUser(username, details any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminUpdateUser", reflect.TypeOf((*MockUserProvider)(nil).AdminUpdateUser), username, details)
 }
 
 // ChangePassword mocks base method.
@@ -176,6 +174,20 @@ func (mr *MockUserProviderMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockUserProvider)(nil).Close))
 }
 
+// CreateUser mocks base method.
+func (m *MockUserProvider) CreateUser(details authentication.UserDetailsCreate) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUser", details)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateUser indicates an expected call of CreateUser.
+func (mr *MockUserProviderMockRecorder) CreateUser(details any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockUserProvider)(nil).CreateUser), details)
+}
+
 // GetDetails mocks base method.
 func (m *MockUserProvider) GetDetails(username string) (*authentication.UserDetails, error) {
 	m.ctrl.T.Helper()
@@ -204,6 +216,21 @@ func (m *MockUserProvider) GetDetailsExtended(username string) (*authentication.
 func (mr *MockUserProviderMockRecorder) GetDetailsExtended(username any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetailsExtended", reflect.TypeOf((*MockUserProvider)(nil).GetDetailsExtended), username)
+}
+
+// GetDetailsForPasswordReset mocks base method.
+func (m *MockUserProvider) GetDetailsForPasswordReset(username string) (*authentication.UserDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDetailsForPasswordReset", username)
+	ret0, _ := ret[0].(*authentication.UserDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDetailsForPasswordReset indicates an expected call of GetDetailsForPasswordReset.
+func (mr *MockUserProviderMockRecorder) GetDetailsForPasswordReset(username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetailsForPasswordReset", reflect.TypeOf((*MockUserProvider)(nil).GetDetailsForPasswordReset), username)
 }
 
 // StartupCheck mocks base method.

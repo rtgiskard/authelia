@@ -11,10 +11,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/authelia/jsonschema"
 	"github.com/go-crypt/crypt"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/stretchr/testify/assert"
@@ -25,6 +27,57 @@ import (
 	"github.com/authelia/authelia/v4/internal/configuration/schema"
 	"github.com/authelia/authelia/v4/internal/expression"
 )
+
+func TestFileUserDatabasePendingCredentialsRoundTrip(t *testing.T) {
+	const validHash = "$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKn50cFzzvE9RXV88h1wJn5KGiHrD0YKtZaR/nCb2CJPOsKaPK0hjf.9yHxzQGZziziccp6Yng"
+
+	for _, extension := range []string{"yml", "yaml", "toml", "json"} {
+		t.Run(extension, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "users."+extension)
+			model := &FileDatabaseModel{Users: map[string]FileDatabaseUserDetailsModel{
+				"pending": {DisplayName: "Pending User", Email: "pending@example.com"},
+				"ready":   {Password: validHash, DisplayName: "Ready User", Disabled: true},
+			}}
+			require.NoError(t, model.Write(path))
+			database := NewFileUserDatabase(path, false, false, nil)
+			require.NoError(t, database.Load())
+			assert.Nil(t, database.Users["pending"].Password)
+			assert.True(t, database.Users["pending"].ToAdminUserDetails().PendingActivation)
+			assert.False(t, database.Users["ready"].ToAdminUserDetails().PendingActivation)
+			assert.Equal(t, validHash, database.Users["ready"].Password.Encode())
+			require.NoError(t, database.Save())
+			require.NoError(t, database.Load())
+			roundTrip := &FileDatabaseModel{}
+			require.NoError(t, roundTrip.Read(path))
+			assert.Equal(t, model, roundTrip)
+
+			for _, malformed := range []string{"not-a-hash", " ", "$unknown$hash", "$argon2id$invalid"} {
+				model.Users["pending"] = FileDatabaseUserDetailsModel{DisplayName: "Pending User", Password: malformed}
+				require.NoError(t, model.Write(path))
+				assert.ErrorContains(t, database.Load(), "error occurred decoding the password hash for 'pending'")
+				assert.Nil(t, database.Users["pending"].Password, "failed loads must preserve the current database")
+				assert.Equal(t, validHash, database.Users["ready"].Password.Encode())
+			}
+		})
+	}
+}
+
+func TestFileUserDatabasePasswordJSONSchema(t *testing.T) {
+	reflector := &jsonschema.Reflector{DoNotReference: true, RequiredFromJSONSchemaTags: true}
+	user := reflector.Reflect(&FileUserDatabaseUserDetails{})
+	value, ok := user.Properties.Get("password")
+	require.True(t, ok)
+	password := value.(*jsonschema.Schema)
+	assert.Equal(t, jsonschema.TypeString, password.Type)
+	assert.Contains(t, user.Required, "password")
+	pattern := regexp.MustCompile(password.Pattern)
+	assert.True(t, pattern.MatchString(""))
+	assert.False(t, pattern.MatchString("not-a-hash"))
+	assert.False(t, pattern.MatchString(" "))
+	assert.True(t, pattern.MatchString("$argon2id$v=19$m=32768,t=1,p=8$eUhVT1dQa082YVk2VUhDMQ$E8QI4jHbUBt3EdsU1NFDu4Bq5jObKNx7nBKSn1EYQxk"))
+	// OIDC client secret schema must retain its existing nonempty requirement.
+	assert.False(t, regexp.MustCompile((schema.PasswordDigest{}).JSONSchema().Pattern).MatchString(""))
+}
 
 func TestDatabaseModel_Read(t *testing.T) {
 	model := &FileDatabaseModel{}
@@ -580,10 +633,10 @@ func TestDatabaseModelExtended(t *testing.T) {
 		{
 			"ShouldHandleEmptyStruct",
 			&FileDatabaseUserDetailsModel{},
+			&FileUserDatabaseUserDetails{Username: "example"},
+			&UserDetailsExtended{UserDetails: &UserDetails{Username: "example"}},
 			nil,
-			nil,
-			nil,
-			"error occurred decoding the password hash for 'example': provided encoded hash has an invalid format: the digest doesn't begin with the delimiter '$' and is not one of the other understood formats",
+			"",
 			"",
 		},
 		{

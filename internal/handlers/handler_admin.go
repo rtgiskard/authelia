@@ -8,7 +8,6 @@ import (
 
 	"github.com/authelia/authelia/v4/internal/authentication"
 	"github.com/authelia/authelia/v4/internal/model"
-	"github.com/authelia/authelia/v4/internal/random"
 	"github.com/authelia/authelia/v4/internal/session"
 	"github.com/authelia/authelia/v4/internal/templates"
 	"github.com/valyala/fasthttp"
@@ -20,13 +19,6 @@ const (
 	adminUserPathParamUsername          = "username"
 	adminUserNotificationDeliveryFailed = "email notification could not be sent"
 	adminUserEmailRequired              = "Email address is required."
-	adminGeneratedPasswordAttempts      = 20
-	adminGeneratedPasswordLength        = 16
-	adminGeneratedPasswordCharacters    = random.CharSetAlphaNumeric + random.CharSetSymbolicRFC3986Unreserved
-)
-
-var (
-	errAdminGeneratedPasswordPolicyFail = errors.New("generated password did not meet the password policy")
 )
 
 // AdminUserSessionElevationGET returns the administrator session elevation status.
@@ -60,14 +52,8 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 
 	password := body.Password
 	if body.SendPasswordLink {
-		var err error
-
-		if password, err = adminGeneratePassword(ctx); err != nil {
-			adminHandleGeneratedPasswordError(ctx, err, messageUnableToCreateUser)
-
-			return
-		}
-	} else if password == "" {
+		password = ""
+	} else if strings.TrimSpace(password) == "" {
 		ctx.SetJSONError(messagePasswordWeak)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 
@@ -104,8 +90,6 @@ func AdminUsersPOST(ctx *middlewares.AutheliaCtx) {
 		if err = ctx.SetJSONBody(adminCreateUserNotify(ctx, details, body.Notify, body.SendPasswordLink)); err != nil {
 			ctx.Logger.WithError(err).Error(errStrRespBody)
 		}
-	case body.SendPasswordLink:
-		handleAdminGeneratedPasswordProviderError(ctx, err, messageUnableToCreateUser)
 	default:
 		handleAdminUserProviderError(ctx, err, messageUnableToCreateUser)
 	}
@@ -224,7 +208,7 @@ func AdminUserPasswordPUT(ctx *middlewares.AutheliaCtx) {
 		return
 	}
 
-	if body.Password == "" {
+	if strings.TrimSpace(body.Password) == "" {
 		ctx.SetJSONError(messagePasswordWeak)
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 
@@ -385,112 +369,6 @@ func adminResetPasswordNotify(ctx *middlewares.AutheliaCtx, details authenticati
 	response.NotificationSent = true
 
 	return response
-}
-
-func adminGeneratePassword(ctx *middlewares.AutheliaCtx) (password string, err error) {
-	length := adminGeneratedPasswordLengthForPolicy(ctx)
-
-	for range adminGeneratedPasswordAttempts {
-		if password, err = adminGeneratedPassword(ctx, length); err != nil {
-			return "", err
-		}
-
-		if err = ctx.Providers.PasswordPolicy.Check(password); err == nil {
-			return password, nil
-		}
-	}
-
-	return "", errAdminGeneratedPasswordPolicyFail
-}
-
-func adminGeneratedPasswordLengthForPolicy(ctx *middlewares.AutheliaCtx) int {
-	length := adminGeneratedPasswordLength
-	if policy := ctx.Configuration.PasswordPolicy.Standard; policy.Enabled {
-		if policy.MinLength > length {
-			length = policy.MinLength
-		}
-		if policy.MaxLength > 0 && length > policy.MaxLength {
-			length = policy.MaxLength
-		}
-	}
-
-	return length
-}
-
-func adminGeneratedPassword(ctx *middlewares.AutheliaCtx, length int) (password string, err error) {
-	policy := ctx.Configuration.PasswordPolicy.Standard
-	classes := [...]struct {
-		characters string
-		required   bool
-	}{
-		{random.CharSetAlphabeticLower, policy.RequireLowercase},
-		{random.CharSetAlphabeticUpper, policy.RequireUppercase},
-		{random.CharSetNumeric, policy.RequireNumber},
-		{random.CharSetSymbolicRFC3986Unreserved, policy.RequireSpecial},
-	}
-
-	var value strings.Builder
-	value.Grow(length)
-
-	for _, class := range classes {
-		if !class.required && length < len(classes) {
-			continue
-		}
-		if value.Len() == length {
-			return "", errAdminGeneratedPasswordPolicyFail
-		}
-
-		part, err := ctx.Providers.Random.StringCustomErr(1, class.characters)
-		if err != nil {
-			return "", err
-		}
-
-		value.WriteString(part)
-	}
-
-	if value.Len() < length {
-		remainder, err := ctx.Providers.Random.StringCustomErr(length-value.Len(), adminGeneratedPasswordCharacters)
-		if err != nil {
-			return "", err
-		}
-		value.WriteString(remainder)
-	}
-
-	return value.String(), nil
-}
-
-func adminHandleGeneratedPasswordError(ctx *middlewares.AutheliaCtx, err error, fallback string) {
-	if errors.Is(err, errAdminGeneratedPasswordPolicyFail) {
-		ctx.SetJSONError(messagePasswordWeak)
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-
-		return
-	}
-
-	ctx.GetLogger().WithError(err).Error(fallback)
-	ctx.SetJSONError(fallback)
-	ctx.SetStatusCode(fasthttp.StatusBadRequest)
-}
-
-func handleAdminGeneratedPasswordProviderError(ctx *middlewares.AutheliaCtx, err error, fallback string) {
-	switch {
-	case errors.Is(err, authentication.ErrUnsupportedOperation):
-		ctx.SetJSONError(messageProviderOperationUnsupported)
-		ctx.SetStatusCode(fasthttp.StatusNotImplemented)
-	case errors.Is(err, authentication.ErrUserNotFound):
-		ctx.SetJSONError(messageUserNotFound)
-		ctx.SetStatusCode(fasthttp.StatusNotFound)
-	case errors.Is(err, authentication.ErrUserAlreadyExists):
-		ctx.SetJSONError(messageUserAlreadyExists)
-		ctx.SetStatusCode(fasthttp.StatusConflict)
-	case errors.Is(err, authentication.ErrPasswordWeak):
-		ctx.SetJSONError(messagePasswordWeak)
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-	default:
-		ctx.Logger.Error(fallback)
-		ctx.SetJSONError(fallback)
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-	}
 }
 
 func adminUserPathUsername(ctx *middlewares.AutheliaCtx) string {

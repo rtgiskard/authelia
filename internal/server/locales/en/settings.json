@@ -56,6 +56,7 @@
 	"Edit WebAuthn Credential": "Edit WebAuthn Credential",
 	"Eligible": "Eligible",
 	"Enabled": "Enabled",
+	"Pending Activation": "Pending Activation",
 	"Enter a description for this WebAuthn Credential": "Enter a description for this WebAuthn Credential",
 	"Enter a new description for this WebAuthn Credential": "Enter a new description for this WebAuthn Credential:",
 	"Error occurred obtaining the WebAuthn Credential creation options": "Error occurred obtaining the WebAuthn Credential creation options",

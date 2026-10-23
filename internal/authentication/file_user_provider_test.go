@@ -27,6 +27,172 @@ import (
 	"github.com/authelia/authelia/v4/internal/configuration/schema"
 )
 
+func TestFileUserProviderPendingActivationLifecycle(t *testing.T) {
+	for _, extension := range []string{"yml", "yaml", "toml", "json"} {
+		t.Run(extension, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "users."+extension)
+			model := &FileDatabaseModel{Users: map[string]FileDatabaseUserDetailsModel{
+				"seed": {DisplayName: "Seed", Email: "seed@example.com"},
+			}}
+			require.NoError(t, model.Write(path))
+
+			config := DefaultFileAuthenticationBackendConfiguration
+			config.Path = path
+			config.Search.Email = true
+			provider := NewFileUserProvider(&config)
+			require.NoError(t, provider.StartupCheck())
+
+			// Pending creation must not hash even an empty password.
+			hash := provider.hash
+			provider.hash = nil
+			require.NoError(t, provider.CreateUser(UserDetailsCreate{
+				Username: "pending", DisplayName: "Pending User", Email: "pending@example.com", Groups: []string{"users"},
+			}))
+			provider.hash = hash
+
+			// A fresh provider exercises schema validation and disk round trips.
+			provider = NewFileUserProvider(&config)
+			require.NoError(t, provider.StartupCheck())
+			for _, password := range []string{"", "password"} {
+				match, err := provider.CheckUserPassword("pending", password)
+				require.NoError(t, err)
+				assert.False(t, match)
+			}
+
+			for _, username := range []string{"pending", "pending@example.com"} {
+				details, err := provider.GetDetails(username)
+				assert.ErrorIs(t, err, ErrUserNotFound)
+				assert.Nil(t, details)
+				extended, err := provider.GetDetailsExtended(username)
+				assert.ErrorIs(t, err, ErrUserNotFound)
+				assert.Nil(t, extended)
+				details, err = provider.GetDetailsForPasswordReset(username)
+				require.NoError(t, err)
+				assert.Equal(t, "pending", details.Username)
+			}
+
+			created, err := provider.AdminGetUser("pending")
+			require.NoError(t, err)
+			require.NotNil(t, created.CreatedAt)
+			assert.True(t, created.PendingActivation)
+			assert.False(t, created.Disabled)
+			listed, err := provider.AdminListUsers(UserProviderAdminListFilter{Search: "pending"})
+			require.NoError(t, err)
+			require.Len(t, listed.Users, 1)
+			assert.Equal(t, created, listed.Users[0])
+			body, err := json.Marshal(created)
+			require.NoError(t, err)
+			assert.Contains(t, string(body), `"pending_activation":true`)
+			assert.NotContains(t, string(body), `"password"`)
+
+			disabled := true
+			updated, err := provider.AdminUpdateUser("pending", UserProviderAdminUserUpdate{Disabled: &disabled})
+			require.NoError(t, err)
+			assert.True(t, updated.PendingActivation)
+			assert.True(t, updated.Disabled)
+			_, err = provider.GetDetails("pending")
+			assert.ErrorIs(t, err, ErrUserNotFound)
+			_, err = provider.GetDetailsExtended("pending")
+			assert.ErrorIs(t, err, ErrUserNotFound)
+			_, err = provider.GetDetailsForPasswordReset("pending")
+			assert.ErrorIs(t, err, ErrUserNotFound)
+			_, err = provider.CheckUserPassword("pending", "")
+			assert.ErrorIs(t, err, ErrUserNotFound)
+			assert.ErrorIs(t, provider.UpdatePassword("pending", "new-password"), ErrUserNotFound)
+
+			disabled = false
+			updated, err = provider.AdminUpdateUser("pending", UserProviderAdminUserUpdate{Disabled: &disabled})
+			require.NoError(t, err)
+			assert.True(t, updated.PendingActivation)
+			assert.ErrorIs(t, provider.ChangePassword("pending", "", "new-password"), ErrIncorrectPassword)
+			require.NoError(t, provider.UpdatePassword("pending@example.com", "new-password"))
+
+			provider = NewFileUserProvider(&config)
+			require.NoError(t, provider.StartupCheck())
+			activated, err := provider.AdminGetUser("pending")
+			require.NoError(t, err)
+			assert.False(t, activated.PendingActivation)
+			assert.Equal(t, created.CreatedAt, activated.CreatedAt)
+			match, err := provider.CheckUserPassword("pending", "new-password")
+			require.NoError(t, err)
+			assert.True(t, match)
+			for _, username := range []string{"pending", "pending@example.com"} {
+				details, err := provider.GetDetails(username)
+				require.NoError(t, err)
+				assert.Equal(t, "pending", details.Username)
+				extended, err := provider.GetDetailsExtended(username)
+				require.NoError(t, err)
+				assert.Equal(t, "pending", extended.Username)
+				details, err = provider.GetDetailsForPasswordReset(username)
+				require.NoError(t, err)
+				assert.Equal(t, "pending", details.Username)
+			}
+
+			// Admin reset also activates a pending user without changing disabled status.
+			disabled = true
+			_, err = provider.AdminUpdateUser("seed", UserProviderAdminUserUpdate{Disabled: &disabled})
+			require.NoError(t, err)
+			require.NoError(t, provider.AdminResetUserPassword("seed", "admin-password"))
+			seed, err := provider.AdminGetUser("seed")
+			require.NoError(t, err)
+			assert.False(t, seed.PendingActivation)
+			assert.True(t, seed.Disabled)
+		})
+	}
+}
+
+func TestFileUserProviderPasswordUpdatesRejectBlankPasswordsBeforeHashing(t *testing.T) {
+	for _, password := range []string{"", "   ", "\t\n"} {
+		t.Run(fmt.Sprintf("password=%q", password), func(t *testing.T) {
+			database := NewFileUserDatabase("", false, false, nil)
+			database.Users["pending"] = FileUserDatabaseUserDetails{Username: "pending"}
+			// A nil hasher ensures rejection happens before password hashing.
+			provider := &FileUserProvider{database: database}
+			assert.ErrorIs(t, provider.UpdatePassword("pending", password), ErrPasswordWeak)
+			assert.ErrorIs(t, provider.AdminResetUserPassword("pending", password), ErrPasswordWeak)
+			assert.False(t, database.Users["pending"].Password.Valid())
+		})
+	}
+}
+
+func TestFileUserProviderAbsentDigestDeniesAuthentication(t *testing.T) {
+	for _, digest := range []*schema.PasswordDigest{nil, {}} {
+		database := NewFileUserDatabase("", false, false, nil)
+		database.Users["pending"] = FileUserDatabaseUserDetails{Username: "pending", Password: digest}
+		provider := &FileUserProvider{database: database}
+		for _, password := range []string{"", "password"} {
+			match, err := provider.CheckUserPassword("pending", password)
+			require.NoError(t, err)
+			assert.False(t, match)
+		}
+		details, err := provider.GetDetails("pending")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, details)
+		extended, err := provider.GetDetailsExtended("pending")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, extended)
+		details, err = provider.GetDetailsForPasswordReset("pending")
+		require.NoError(t, err)
+		assert.Equal(t, "pending", details.Username)
+		assert.Empty(t, database.Users["pending"].ToUserDetailsModel().Password)
+		assert.True(t, database.Users["pending"].ToAdminUserDetails().PendingActivation)
+	}
+}
+
+func TestFileUserProviderCreateUserRejectsInvalidRequiredValues(t *testing.T) {
+	for _, details := range []UserDetailsCreate{
+		{DisplayName: "Pending User", Email: "pending@example.com"},
+		{Username: "pending", Email: "pending@example.com"},
+		{Username: "pending", DisplayName: "Pending User"},
+		{Username: "pending", Password: " ", DisplayName: "Pending User", Email: "pending@example.com"},
+	} {
+		database := NewFileUserDatabase("", false, false, nil)
+		provider := &FileUserProvider{database: database}
+		assert.ErrorIs(t, provider.CreateUser(details), ErrOperationFailed)
+		assert.Empty(t, database.Users)
+	}
+}
+
 func TestShouldErrorPermissionsOnLocalFS(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping test due to being on windows")
@@ -334,6 +500,12 @@ func TestShouldErrOnUserDetailsNoUser(t *testing.T) {
 		extended, err := provider.GetDetailsExtended("dis")
 		assert.Nil(t, extended)
 		assert.Equal(t, err, ErrUserNotFound)
+
+		for _, username := range []string{"nouser", "dis"} {
+			details, err = provider.GetDetailsForPasswordReset(username)
+			assert.Nil(t, details)
+			assert.ErrorIs(t, err, ErrUserNotFound)
+		}
 	})
 }
 

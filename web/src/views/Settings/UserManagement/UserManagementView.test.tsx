@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createInstance } from "i18next";
 
 import { SecondFactorMethod } from "@models/Methods";
@@ -181,6 +181,7 @@ beforeEach(() => {
         display_name: "Alice Admin",
         email: "alice@example.com",
         groups: ["admins"],
+        pending_activation: false,
         username: "alice",
     });
     vi.mocked(getPasswordPolicyConfiguration).mockResolvedValue({
@@ -244,6 +245,7 @@ it("renders users returned by the list endpoint", async () => {
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins", "users"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -258,6 +260,67 @@ it("renders users returned by the list endpoint", async () => {
     expect(screen.getByText("Alice Admin")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 });
+
+it.each([
+    { disabled: "Disabled", enabled: "Enabled", isMobile: false, language: "en", pending: "Pending Activation" },
+    { disabled: "Disabled", enabled: "Enabled", isMobile: true, language: "en", pending: "Pending Activation" },
+    { disabled: "已禁用", enabled: "已启用", isMobile: false, language: "zh-CN", pending: "待激活" },
+    { disabled: "已禁用", enabled: "已启用", isMobile: true, language: "zh-CN", pending: "待激活" },
+])(
+    "shows distinct, accessible localized status icons with disabled precedence (mobile: $isMobile, locale: $language)",
+    async ({ disabled, enabled, isMobile, language, pending }) => {
+        const i18n = createInstance();
+        await i18n.init({
+            defaultNS: "settings",
+            fallbackLng: "en",
+            lng: language,
+            resources: {
+                en: { settings: enSettings },
+                "zh-CN": { settings: zhCNSettings },
+            },
+        });
+        mockTranslate.mockImplementation((key, values) => i18n.t(key, values));
+        const media = globalThis.matchMedia("(max-width: 899px)");
+        vi.spyOn(globalThis, "matchMedia").mockReturnValue({ ...media, matches: isMobile });
+        vi.mocked(listAdminUsers).mockResolvedValue(
+            [
+                { disabled: false, pending_activation: false, username: "ready" },
+                { disabled: false, pending_activation: true, username: "pending" },
+                { disabled: true, pending_activation: false, username: "disabled-ready" },
+                { disabled: true, pending_activation: true, username: "disabled-pending" },
+            ].map((user) => ({ display_name: user.username, email: "", groups: [], ...user })),
+        );
+
+        render(<UserManagementView />);
+
+        const enabledIcon = await screen.findByRole("img", { name: enabled });
+        const pendingIcon = screen.getByRole("img", { name: pending });
+        const disabledIcons = screen.getAllByRole("img", { name: disabled });
+        expect(disabledIcons).toHaveLength(2);
+        const icons = [enabledIcon, pendingIcon, ...disabledIcons];
+        for (const icon of icons) {
+            expect(icon).toHaveAttribute("tabindex", "0");
+            expect(icon.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+        }
+        const shapes = icons.map((icon) => icon.querySelector("svg")?.innerHTML);
+        expect(new Set(shapes).size).toBe(3);
+        expect(shapes[2]).toBe(shapes[3]);
+        expect(pendingIcon).not.toHaveTextContent(pending);
+
+        fireEvent.keyDown(document.body, { key: "Tab" });
+        act(() => pendingIcon.focus());
+        expect(pendingIcon).toHaveFocus();
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(pending);
+        if (isMobile) {
+            expect(screen.queryByRole("table")).not.toBeInTheDocument();
+        } else {
+            expect(screen.getByRole("columnheader", { name: i18n.t("Status") })).toHaveAttribute(
+                "aria-sort",
+                "ascending",
+            );
+        }
+    },
+);
 
 it.each([
     { isMobile: false, label: "Added Time", language: "en", unknown: "Unknown" },
@@ -290,6 +353,7 @@ it.each([
                 display_name: "Alice Admin",
                 email: "alice@example.com",
                 groups: ["admins"],
+                pending_activation: false,
                 username: "alice",
             },
             {
@@ -297,6 +361,7 @@ it.each([
                 display_name: "Legacy User",
                 email: "legacy@example.com",
                 groups: [],
+                pending_activation: false,
                 username: "legacy",
             },
             {
@@ -305,6 +370,7 @@ it.each([
                 display_name: "Unknown User",
                 email: "unknown@example.com",
                 groups: [],
+                pending_activation: false,
                 username: "unknown",
             },
         ]);
@@ -340,6 +406,7 @@ it("shows an empty state when search has no matching users", async () => {
                 display_name: "Alice Admin",
                 email: "alice@example.com",
                 groups: ["admins"],
+                pending_activation: false,
                 username: "alice",
             },
         ])
@@ -484,6 +551,7 @@ it("shows duplicate identity feedback while creating a user", async () => {
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -513,6 +581,7 @@ it("requires an email address when editing a user", async () => {
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -540,6 +609,7 @@ it("keeps the creation timestamp read-only and out of edit payloads", async () =
         display_name: "Alice Admin",
         email: "alice@example.com",
         groups: ["admins"],
+        pending_activation: false,
         username: "alice",
     };
     vi.mocked(listAdminUsers).mockResolvedValue([user]);
@@ -573,6 +643,7 @@ it("shows duplicate email feedback while editing a user", async () => {
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
         {
@@ -580,6 +651,7 @@ it("shows duplicate email feedback while editing a user", async () => {
             display_name: "Bob Admin",
             email: "bob@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "bob",
         },
     ]);
@@ -825,6 +897,7 @@ it("hides delete actions and uses clearer sign-in labels when delete is unavaila
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -845,6 +918,7 @@ it("toggles a user with a disabled-only update payload", async () => {
             display_name: "Alice Admin",
             email: "",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -862,6 +936,37 @@ it("toggles a user with a disabled-only update payload", async () => {
     });
 });
 
+it("preserves pending activation across disabling and re-enabling with disabled-only payloads", async () => {
+    const user = {
+        disabled: false,
+        display_name: "Pending User",
+        email: "pending@example.com",
+        groups: [],
+        pending_activation: true,
+        username: "pending",
+    };
+    vi.mocked(listAdminUsers)
+        .mockResolvedValueOnce([user])
+        .mockResolvedValueOnce([{ ...user, disabled: true }])
+        .mockResolvedValue([user]);
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByRole("img", { name: "Pending Activation" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Disable User pending" }));
+    let dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Disable User" }));
+    expect(await screen.findByRole("img", { name: "Disabled" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Pending Activation" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable User pending" }));
+    dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Enable User" }));
+    expect(await screen.findByRole("img", { name: "Pending Activation" })).toBeInTheDocument();
+    expect(updateAdminUser).toHaveBeenNthCalledWith(1, "pending", { disabled: true });
+    expect(updateAdminUser).toHaveBeenNthCalledWith(2, "pending", { disabled: false });
+});
+
 it("uses client-side pagination for listed users", async () => {
     vi.mocked(listAdminUsers).mockResolvedValue(
         Array.from({ length: 21 }, (_value, index) => ({
@@ -869,6 +974,7 @@ it("uses client-side pagination for listed users", async () => {
             display_name: `User ${index + 1}`,
             email: `user-${index + 1}@example.com`,
             groups: [],
+            pending_activation: false,
             username: `user-${String(index + 1).padStart(2, "0")}`,
         })),
     );
@@ -885,32 +991,36 @@ it("uses client-side pagination for listed users", async () => {
     expect(screen.queryByText("user-01")).not.toBeInTheDocument();
 });
 
-it("sorts users by status from the status header", async () => {
-    vi.mocked(listAdminUsers).mockResolvedValue([
-        {
-            disabled: false,
-            display_name: "Alice Admin",
-            email: "alice@example.com",
-            groups: ["admins"],
-            username: "alice",
-        },
-        {
-            disabled: true,
-            display_name: "Bob Admin",
-            email: "bob@example.com",
-            groups: ["admins"],
-            username: "bob",
-        },
-    ]);
+it("sorts enabled, pending activation, then disabled users with stable username ties in both directions", async () => {
+    vi.mocked(listAdminUsers).mockResolvedValue(
+        [
+            { disabled: true, pending_activation: true, username: "beta-disabled" },
+            { disabled: false, pending_activation: true, username: "zulu-pending" },
+            { disabled: false, pending_activation: false, username: "zulu-enabled" },
+            { disabled: false, pending_activation: true, username: "alpha-pending" },
+            { disabled: true, pending_activation: false, username: "alpha-disabled" },
+        ].map((user) => ({ display_name: user.username, email: "", groups: [], ...user })),
+    );
 
     render(<UserManagementView />);
 
-    await screen.findByText("alice", {}, { timeout: 3000 });
-    expect(within(screen.getAllByRole("row")[1]).getByText("alice")).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Status" });
+    const names = () =>
+        screen
+            .getAllByRole("row")
+            .slice(1)
+            .map((row) => row.querySelector("td")?.textContent);
+    expect(names()).toEqual(["zulu-enabled", "alpha-pending", "zulu-pending", "alpha-disabled", "beta-disabled"]);
+    expect(screen.getByRole("columnheader", { name: "Status" })).toHaveAttribute("aria-sort", "ascending");
 
     fireEvent.click(screen.getByRole("button", { name: "Status" }));
 
-    expect(within(screen.getAllByRole("row")[1]).getByText("bob")).toBeInTheDocument();
+    expect(names()).toEqual(["alpha-disabled", "beta-disabled", "alpha-pending", "zulu-pending", "zulu-enabled"]);
+    expect(screen.getByRole("columnheader", { name: "Status" })).toHaveAttribute("aria-sort", "descending");
+
+    fireEvent.click(screen.getByRole("button", { name: "Status" }));
+
+    expect(names()).toEqual(["zulu-enabled", "alpha-pending", "zulu-pending", "alpha-disabled", "beta-disabled"]);
 });
 
 it("sorts by username and creation time with unknown dates last and stable ties", async () => {
@@ -926,6 +1036,7 @@ it("sorts by username and creation time with unknown dates last and stable ties"
             display_name: user.username,
             email: `${user.username}@example.com`,
             groups: [],
+            pending_activation: false,
             ...user,
         })),
     );
@@ -956,6 +1067,7 @@ it("sorts the full collection before pagination and returns to the first page", 
             display_name: `User ${index}`,
             email: `user${index}@example.com`,
             groups: [],
+            pending_activation: false,
             username: `user-${String(index).padStart(2, "0")}`,
         })),
     );
@@ -976,6 +1088,7 @@ it("resets a user password with a password link notification payload", async () 
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -1022,6 +1135,7 @@ it("shows password-policy feedback for weak password reset failures", async () =
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -1068,6 +1182,7 @@ it("shows delete action when supported and deletes after confirmation", async ()
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: ["admins"],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -1106,6 +1221,7 @@ it.each(["sent", "failed", "skipped"] as const)(
                 display_name: "Alice Admin",
                 email: "alice@example.com",
                 groups: [],
+                pending_activation: false,
                 username: "alice",
             },
         ]);
@@ -1146,6 +1262,7 @@ it("reports a changed password and translates an outstanding-link invalidation w
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: [],
+            pending_activation: false,
             username: "alice",
         },
     ]);
@@ -1177,6 +1294,7 @@ it.each(["sent", "failed", "skipped"] as const)(
                 display_name: "Alice Admin",
                 email: "alice@example.com",
                 groups: [],
+                pending_activation: false,
                 username: "alice",
             },
         ]);
@@ -1208,6 +1326,7 @@ it.each(["disabled", "custom"])("disables link mode for %s password reset config
             display_name: "Alice Admin",
             email: "alice@example.com",
             groups: [],
+            pending_activation: false,
             username: "alice",
         },
     ]);

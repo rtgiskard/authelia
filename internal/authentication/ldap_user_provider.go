@@ -184,6 +184,11 @@ func (p *LDAPUserProvider) GetDetails(username string) (details *UserDetails, er
 	}, nil
 }
 
+// GetDetailsForPasswordReset retrieves user details using the LDAP eligibility rules.
+func (p *LDAPUserProvider) GetDetailsForPasswordReset(username string) (details *UserDetails, err error) {
+	return p.GetDetails(username)
+}
+
 // GetDetailsExtended retrieves the UserDetailsExtended values.
 func (p *LDAPUserProvider) GetDetailsExtended(username string) (details *UserDetailsExtended, err error) {
 	var (

@@ -935,6 +935,16 @@ func createGroupSearchResultModeFilterWithDN(name string, groupNames []string, g
 }
 
 func TestShouldNotCrashWhenGroupsAreNotRetrievedFromLDAP(t *testing.T) {
+	testLDAPDetailsWithoutGroups(t, false)
+}
+
+func TestLDAPUserProviderGetDetailsForPasswordReset(t *testing.T) {
+	testLDAPDetailsWithoutGroups(t, true)
+}
+
+func testLDAPDetailsWithoutGroups(t *testing.T, passwordReset bool) {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1003,7 +1013,12 @@ func TestShouldNotCrashWhenGroupsAreNotRetrievedFromLDAP(t *testing.T) {
 
 	gomock.InOrder(dialURL, setTimeout, dseSearch, clientBind, searchProfile, searchGroups, clientClose)
 
-	details, err := provider.GetDetails("john")
+	getDetails := provider.GetDetails
+	if passwordReset {
+		getDetails = provider.GetDetailsForPasswordReset
+	}
+
+	details, err := getDetails("john")
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, details.Groups, []string{})

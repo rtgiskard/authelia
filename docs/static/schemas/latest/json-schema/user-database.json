@@ -32,9 +32,10 @@
     "FileUserDatabaseUserDetails": {
       "properties": {
         "password": {
-          "$ref": "#/$defs/PasswordDigest",
+          "type": "string",
+          "pattern": "^$|^\\$((argon2(id|i|d)\\$v=19\\$m=\\d+,t=\\d+,p=\\d+|scrypt\\$ln=\\d+,r=\\d+,p=\\d+)\\$[a-zA-Z0-9\\/+]+\\$[a-zA-Z0-9\\/+]+|pbkdf2(-sha(224|256|384|512))?\\$\\d+\\$[a-zA-Z0-9\\/.]+\\$[a-zA-Z0-9\\/.]+|bcrypt-sha256\\$v=2,t=2b,r=\\d+\\$[a-zA-Z0-9\\/.]+\\$[a-zA-Z0-9\\/.]+|2(a|b|y)?\\$\\d+\\$[a-zA-Z0-9.\\/]+|(5|6)\\$rounds=\\d+\\$[a-zA-Z0-9.\\/]+\\$[a-zA-Z0-9.\\/]+|plaintext\\$.+|base64\\$[a-zA-Z0-9.=\\/]+)$",
           "title": "Password",
-          "description": "The hashed password for the user."
+          "description": "The hashed password for the user, or an empty string while awaiting password setup."
         },
         "displayname": {
           "type": "string",

@@ -1,10 +1,12 @@
 import {
     createAdminUser,
+    getAdminUser,
     getAdminUserManagementCapabilities,
     listAdminUsers,
     resetAdminUserPassword,
+    updateAdminUser,
 } from "@services/AdminUsers";
-import { Get, PostWithOptionalResponse, PutWithOptionalResponse } from "@services/Client";
+import { Get, PatchWithOptionalResponse, PostWithOptionalResponse, PutWithOptionalResponse } from "@services/Client";
 
 vi.mock("@services/Api", () => ({
     AdminUsersPath: "/admin/users",
@@ -128,6 +130,35 @@ it("normalizes null users from the list endpoint", async () => {
     vi.mocked(Get).mockResolvedValue({ total: 0, users: null });
 
     await expect(listAdminUsers("missing")).resolves.toEqual([]);
+});
+
+it.each([
+    { disabled: false, pending_activation: false },
+    { disabled: false, pending_activation: true },
+    { disabled: true, pending_activation: false },
+    { disabled: true, pending_activation: true },
+])("preserves independent activation and disabled facts through list, read, and update: %j", async (status) => {
+    const user = {
+        display_name: "Alice Admin",
+        email: "alice@example.com",
+        groups: ["admins"],
+        username: "alice",
+        ...status,
+    };
+    vi.mocked(Get).mockResolvedValue({ total: 1, users: [user] });
+    await expect(listAdminUsers()).resolves.toEqual([user]);
+
+    vi.mocked(Get).mockResolvedValue(user);
+    await expect(getAdminUser("alice")).resolves.toEqual(user);
+
+    const updatedUser = { ...user, disabled: !user.disabled };
+    vi.mocked(PatchWithOptionalResponse).mockResolvedValue(updatedUser);
+    await expect(updateAdminUser("alice", { disabled: !user.disabled })).resolves.toEqual(updatedUser);
+    expect(PatchWithOptionalResponse).toHaveBeenLastCalledWith(
+        "/admin/users/alice",
+        { disabled: !user.disabled },
+        undefined,
+    );
 });
 
 it("resets a user password with password link notification", async () => {

@@ -234,16 +234,18 @@ func TestAdminUsersPOST_ShouldNotExposeNotifierError(t *testing.T) {
 	assert.NotContains(t, bodyString, "smtp password leaked")
 }
 
-func TestAdminUsersPOST_ShouldCreateUndisclosedPasswordAndSendSetupLink(t *testing.T) {
+func TestAdminUsersPOST_ShouldCreateWithoutPasswordAndSendSetupLink(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
+		password      string
 		minLength     int
 		maxLength     int
 		notify        bool
 		deliveryError error
 	}{
-		{name: "Default", minLength: 12},
+		{name: "Default", minLength: 12, password: "ignored-supplied-password"},
 		{name: "MinimumLength", minLength: 24},
+		{name: "WhitespacePasswordIgnored", minLength: 12, password: " \t\n"},
 		{name: "MaximumLength", minLength: 8, maxLength: 10},
 		{name: "NotifyFalseStillSends", minLength: 12, notify: false},
 		{name: "DeliveryFailure", minLength: 12, deliveryError: fmt.Errorf("smtp password leaked: secret-token")},
@@ -259,18 +261,15 @@ func TestAdminUsersPOST_ShouldCreateUndisclosedPasswordAndSendSetupLink(t *testi
 			mock.Ctx.Configuration.PasswordPolicy = policy
 			mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(policy)
 			bodyBytes, err := json.Marshal(adminCreateUserRequestBody{
-				Username: "john", DisplayName: "John Doe", Email: "john@example.com", SendPasswordLink: true, Notify: &tc.notify,
+				Username: "john", DisplayName: "John Doe", Email: "john@example.com", Password: tc.password, SendPasswordLink: true, Notify: &tc.notify,
 			})
 			require.NoError(t, err)
 			adminSetJSONBody(mock.Ctx, bodyBytes)
 
-			var initialPassword string
 			gomock.InOrder(
 				mock.UserProviderMock.EXPECT().CreateUser(gomock.Any()).DoAndReturn(func(details authentication.UserDetailsCreate) error {
 					assert.Equal(t, "john", details.Username)
-					assert.NotEmpty(t, details.Password)
-					assert.NoError(t, mock.Ctx.Providers.PasswordPolicy.Check(details.Password))
-					initialPassword = details.Password
+					assert.Empty(t, details.Password)
 					return nil
 				}),
 				mock.StorageMock.EXPECT().SaveIdentityVerification(mock.Ctx, gomock.Any()).Return(nil),
@@ -283,7 +282,7 @@ func TestAdminUsersPOST_ShouldCreateUndisclosedPasswordAndSendSetupLink(t *testi
 					assert.Contains(t, values.LinkURL, "/reset-password/step2?")
 					serialized, err := json.Marshal(data)
 					require.NoError(t, err)
-					assert.NotContains(t, string(serialized), initialPassword)
+					assert.NotContains(t, string(serialized), "ignored-supplied-password")
 					return tc.deliveryError
 				}),
 			)
@@ -292,7 +291,7 @@ func TestAdminUsersPOST_ShouldCreateUndisclosedPasswordAndSendSetupLink(t *testi
 
 			body := string(mock.Ctx.Response.Body())
 			assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
-			assert.NotContains(t, body, initialPassword)
+			assert.NotContains(t, body, "ignored-supplied-password")
 			assert.NotContains(t, body, "secret-token")
 			if tc.deliveryError != nil {
 				assert.Contains(t, body, adminUserNotificationDeliveryFailed)
@@ -425,6 +424,31 @@ func TestAdminUsersPOST_ShouldPreserveCreationWhenOnboardingLinkUnavailable(t *t
 				assert.Equal(t, fasthttp.StatusOK, mock.Ctx.Response.StatusCode())
 				assert.Contains(t, string(mock.Ctx.Response.Body()), `"notification_sent":false`)
 				assert.Contains(t, string(mock.Ctx.Response.Body()), adminUserNotificationDeliveryFailed)
+			})
+		}
+	}
+}
+
+func TestAdminManualPassword_ShouldRejectBlankWithPolicyDisabled(t *testing.T) {
+	for _, operation := range []string{"create", "reset"} {
+		for _, password := range []string{"", " \t\r\n", "\u00a0\u2003"} {
+			t.Run(fmt.Sprintf("%s/password=%q", operation, password), func(t *testing.T) {
+				mock := mocks.NewMockAutheliaCtx(t)
+				defer mock.Close()
+				mock.Ctx.Providers.PasswordPolicy = middlewares.NewPasswordPolicyProvider(schema.PasswordPolicy{})
+				body, err := json.Marshal(adminCreateUserRequestBody{
+					Username: "john", DisplayName: "John Doe", Email: "john@example.com", Password: password,
+				})
+				require.NoError(t, err)
+				adminSetJSONBody(mock.Ctx, body)
+				mock.Ctx.SetUserValue("username", "john")
+				if operation == "create" {
+					AdminUsersPOST(mock.Ctx)
+				} else {
+					AdminUserPasswordPUT(mock.Ctx)
+				}
+				assert.Equal(t, fasthttp.StatusBadRequest, mock.Ctx.Response.StatusCode())
+				assert.Equal(t, messagePasswordWeak, mock.GetResponseError(t).Message)
 			})
 		}
 	}

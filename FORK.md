@@ -92,6 +92,23 @@ by default, survive form reloads and unsuccessful attempts, and all outstanding 
 after a successful password reset. Built-in emails support English and Simplified Chinese through
 `notifier.default_language` and supported self-service language preferences.
 
+New accounts created in password-link mode persist `password: ""` rather than a random password hash. An empty
+password means pending activation and is excluded from authentication profile lookups, including passkey login,
+Basic credential-cache hits, and session profile refresh. Existing sessions follow the configured backend refresh interval;
+clearing a hash is not immediate session or OAuth-token revocation. A separate password-reset identity lookup permits
+pending accounts but still rejects disabled accounts. Password writes reject blank input before hashing or consuming reset links.
+Setting a nonblank password through a valid setup link or an administrator ends the pending state without changing `disabled`.
+Nonempty malformed hashes remain database errors. Existing hashes are treated as configured credentials without
+attempting to infer whether historical invitations were completed. Link expiry, delivery failure, and resending do not
+change account status. Older application versions that reject empty password hashes cannot read pending accounts.
+Admin responses expose derived `pending_activation`, not a stored activation flag or password. User-management status
+icons distinguish enabled, pending activation, and disabled with localized accessible tooltips; disabled takes display
+precedence. Status sorting groups enabled, pending, and disabled accounts in that order by default.
+
+New self-service reset links use the canonical backend username so email and case-insensitive aliases share account-wide
+link revocation. Previously issued alias-keyed links are not migrated; rotate the password-reset signing secret during
+rollout if all legacy links must become invalid immediately.
+
 Enabled new-user notifications use one onboarding email containing account details, a password-setup link, the actual
 configured validity and expiry, and instructions to contact the administrator for a replacement after expiry. Manual
 password creation and explicit notification opt-out remain available; sending an invitation does not change an existing

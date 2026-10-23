@@ -54,6 +54,7 @@
 	"Edit WebAuthn Credential": "编辑 WebAuthn 凭据",
 	"Eligible": "符合条件",
 	"Enabled": "已启用",
+	"Pending Activation": "待激活",
 	"Enter a description for this WebAuthn Credential": "输入此 WebAuthn 凭据的描述",
 	"Enter a new description for this WebAuthn Credential": "输入此 WebAuthn 凭据的新描述：",
 	"Error occurred obtaining the WebAuthn Credential creation options": "获取 WebAuthn 凭据创建选项时出错",
